@@ -1,0 +1,8 @@
+name,description,parameters
+open_navigation_drawer,Open the navigation drawer to access additional options or settings.,{}
+select_tab,Select a specific tab to navigate to its corresponding section.,"{'tab_name': 'Which tab do you want to select? [""Photos"", ""Search""]'}"
+view_photo,View a specific photo from the displayed collection.,"{'photo_description': ""Which photo do you want to view? (e.g., 'Photo taken on Aug 6, 2025 9:29:50 AM')""}"
+long_click_photo,Perform a long click on a photo to access additional options like sharing or deleting.,"{'photo_description': ""Which photo do you want to long-click? (e.g., 'Photo taken on Aug 6, 2025 9:29:50 AM')""}"
+sign_in,Initiate the sign-in process to access account-specific features.,{}
+open_camera,Open the camera application to take a new photo.,{}
+take_photo,Take a new photo using the camera.,{}

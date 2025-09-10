@@ -1,0 +1,2 @@
+name,description,parameters
+select_contact_type,Select a contact type from the list of available options.,"{'contact_type': 'Which contact type do you want to select? [""Mobile"", ""Home"", ""Work"", ""Work Fax"", ""Home Fax"", ""Pager"", ""Other"", ""Custom"", ""Callback"", ""Car"", ""Company Main"", ""ISDN""]'}"

@@ -1,0 +1,7 @@
+name,description,parameters
+set_timer_duration,Set the duration for the timer by selecting digits.,"{'digit': 'Which digit do you want to add to the timer duration? [1, 2, 3, 4, 5, 6, 7, 8, 9, 00, 0]'}"
+delete_last_digit,Delete the last digit entered in the timer duration.,{}
+open_more_options,Open additional options for the timer.,{}
+switch_to_tab,Switch to a different tab in the app.,"{'tab': 'Which tab do you want to switch to? [Alarm, Clock, Timer, Stopwatch, Bedtime]'}"
+pause_stopwatch,Pause the currently running stopwatch.,{}
+start_stopwatch,Start the stopwatch by clicking the 'Start' button.,{}

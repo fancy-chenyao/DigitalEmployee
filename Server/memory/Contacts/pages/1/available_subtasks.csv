@@ -1,0 +1,13 @@
+name,description,parameters
+search_contacts,Search for a contact using a name or keyword.,{'search_query': 'What name or keyword would you like to search for?'}
+open_navigation_drawer,Open the navigation drawer to access additional options or settings.,{}
+select_contact_group,Select a group of contacts to filter the contact list.,"{'group_type': 'Which group do you want to select? [Phone contacts, Email contacts, Company]'}"
+view_contact_details,View details of a specific contact.,{'contact_name': 'Which contact do you want to view?'}
+create_new_contact,Create a new contact entry.,{}
+switch_tab,Switch to a different tab in the app.,"{'tab_name': 'Which tab do you want to switch to? [Contacts, Highlights, Fix & manage]'}"
+access_account_settings,Access account and settings information.,{}
+show_more_options,Show more options for the current screen.,{}
+delete_contact,Delete a specific contact from the contact list.,{'contact_name': 'Which contact do you want to delete?'}
+delete_contact,Delete a specific contact from the contact list.,{'contact_name': 'Which contact do you want to delete? [Tom]'}
+mark_as_favorite,Mark a specific contact as a favorite.,{'contact_name': 'Which contact do you want to mark as a favorite?'}
+return_to_home_screen,Return to the home screen of the device.,{}

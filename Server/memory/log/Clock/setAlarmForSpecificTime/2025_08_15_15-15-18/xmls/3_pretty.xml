@@ -1,0 +1,31 @@
+<?xml version="1.0" ?>
+<div index="3">
+	<p id="header_title" index="4">选择时间</p>
+	<div id="material_timepicker_view" index="5">
+		<View id="material_clock_display_and_toggle" index="6"/>
+		<div id="material_clock_display" index="7">
+			<checker text="06" id="material_hour_tv" description="6 小时" clickable="true" index="8" checked="false"/>
+			<p index="9">:</p>
+			<checker text="00" id="material_minute_tv" description="3 分" clickable="true" index="10" checked="true"/>
+		</div>
+		<div id="material_clock_face" index="11">
+			<View id="material_clock_hand" index="12"/>
+			<button text="55" description="55 分" index="13"/>
+			<button text="00" description="00 分" index="14"/>
+			<button text="50" description="50 分" index="15"/>
+			<button text="05" description="05 分" index="16"/>
+			<button text="10" description="10 分" index="17"/>
+			<button text="45" description="45 分" index="18"/>
+			<View id="circle_center" index="19"/>
+			<button text="15" description="15 分" index="20"/>
+			<button text="40" description="40 分" index="21"/>
+			<button text="35" description="35 分" index="22"/>
+			<button text="30" description="30 分" index="23"/>
+			<button text="25" description="25 分" index="24"/>
+			<button text="20" description="20 分" index="25"/>
+		</div>
+	</div>
+	<button id="material_timepicker_mode_button" description="切换到文字输入模式来输入时间。" index="26"/>
+	<button text="取消" id="material_timepicker_cancel_button" index="27"/>
+	<button text="确定" id="material_timepicker_ok_button" index="28"/>
+</div>

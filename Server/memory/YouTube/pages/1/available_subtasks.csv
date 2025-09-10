@@ -1,0 +1,4 @@
+name,description,parameters
+search_youtube,Search for content on YouTube.,{'search_query': 'What do you want to search for on YouTube?'}
+open_more_options,Open more options menu.,{}
+navigate_to_section,Navigate to a specific section of the app.,"{'section_name': 'Which section do you want to navigate to? [Home, Shorts, Subscriptions, Library]'}"

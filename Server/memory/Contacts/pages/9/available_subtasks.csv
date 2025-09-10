@@ -1,0 +1,8 @@
+name,description,parameters
+navigate_up,Navigate back to the previous screen or parent view.,{}
+edit_contact,Edit the details of the selected contact.,{'contact_name': 'Which contact do you want to edit?'}
+remove_from_favorites,Remove the selected contact from favorites.,{'contact_name': 'Which contact do you want to remove from favorites?'}
+call_contact,Call the selected contact.,{'contact_name': 'Which contact do you want to call?'}
+text_contact,Send a text message to the selected contact.,{'contact_name': 'Which contact do you want to text?'}
+set_up_video_call,Set up a video call with the selected contact using Duo.,{'contact_name': 'Which contact do you want to set up a video call with?'}
+view_more_options,Open additional options for the selected contact.,{'contact_name': 'Which contact do you want to view more options for?'}

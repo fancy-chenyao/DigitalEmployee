@@ -1,0 +1,77 @@
+<?xml version="1.0" ?>
+<div index="5">
+	<div id="conversation_and_compose_container" index="7">
+		<div id="conversation_placeholder_container" index="8"/>
+		<div id="contact_picker_fragment_container" index="9"/>
+		<div id="group_name_edit_fragment_container" index="10"/>
+		<div id="conversation_fragment_with_c20_root" index="12">
+			<View id="focus_sink" index="13"/>
+			<div id="banners_fragment" index="14"/>
+			<scroll id="list" description="Message list" scrollable="true" index="18">
+				<button id="conversation_message_view" long-clickable="true" index="19">
+					<button id="message_content" description="You said  hello  ., Thursday 3:14 AM, SMS" long-clickable="true" index="20">
+						<button text="hello" id="message_text" index="22"/>
+					</button>
+				</button>
+				<button id="conversation_message_view" long-clickable="true" index="23">
+					<button id="message_content" description="You said  hello  ., Thursday 3:24 AM, SMS" long-clickable="true" index="24">
+						<button text="hello" id="message_text" index="26"/>
+					</button>
+				</button>
+				<button id="conversation_message_view" long-clickable="true" index="27">
+					<button id="message_content" description="You said  hi  ., Thursday 3:25 AM, SMS" long-clickable="true" index="28">
+						<button text="hi" id="message_text" index="30"/>
+					</button>
+				</button>
+				<button id="conversation_message_view" long-clickable="true" index="31">
+					<p id="message_separator" index="32">Friday • 3:32 AM</p>
+					<button id="message_content" description="You said  hi  ., Friday 3:32 AM, SMS" long-clickable="true" index="33">
+						<button text="hi" id="message_text" index="35"/>
+					</button>
+				</button>
+				<button id="conversation_message_view" long-clickable="true" index="36">
+					<p id="message_separator" index="37">1:15 AM</p>
+					<button id="message_content" description="You said  hi.  ., 16 minutes, SMS" long-clickable="true" index="38">
+						<button text="hi." id="message_text" index="40"/>
+					</button>
+				</button>
+				<button id="conversation_message_view" long-clickable="true" index="41">
+					<button id="message_content" description="You said  hi.  ., 1 minute, SMS" long-clickable="true" index="42">
+						<button text="hi." id="message_text" index="44"/>
+					</button>
+				</button>
+				<button id="conversation_message_view" long-clickable="true" index="45">
+					<button id="message_content" description="You said  hi.  ., Now, SMS" long-clickable="true" index="46">
+						<button text="hi." id="message_text" index="48"/>
+					</button>
+					<p id="message_status" description="Now, SMS" index="51">Now • SMS</p>
+				</button>
+				<View id="compose_message_placeholder" index="52"/>
+			</scroll>
+			<div id="sim_picker_fragment" index="53"/>
+			<div id="message_compose_view_container_with_c2o" index="54">
+				<button id="plus_button" description="Add files, location, and more" index="55"/>
+				<button id="camera_gallery_button" description="Attach from camera or gallery" index="56"/>
+				<div id="compose_message_container" index="58">
+					<input id="compose_message_text" clickable="true" long-clickable="true" index="60">Text message</input>
+					<View id="compose_gk_tooltip_anchor" index="62"/>
+				</div>
+				<div id="audio_button_view" description="Double-tap and hold to record audio, slide left to cancel" index="63">
+					<img id="audio_button_view_background" index="64"/>
+					<img id="audio_button_view_microphone_icon" index="65"/>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div id="toolbar" index="66">
+		<button description="Navigate up" index="67"/>
+		<button id="conversation_title_container" index="68">
+			<p id="conversation_title" description="Bob" index="69">Bob</p>
+		</button>
+		<LinearLayoutCompat index="70">
+			<button id="action_call" description="Make a call" index="71"/>
+			<button id="action_zero_state_search" description="Search" index="72"/>
+			<button id="action_bar_overflow" description="More conversation options" long-clickable="true" index="73"/>
+		</LinearLayoutCompat>
+	</div>
+</div>

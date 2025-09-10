@@ -1,0 +1,12 @@
+<?xml version="1.0" ?>
+<ListView index="2">
+	<button index="3">
+		<p id="title" index="6">Share</p>
+	</button>
+	<button index="7">
+		<p id="title" index="10">Forward</p>
+	</button>
+	<button index="11">
+		<p id="title" index="14">View details</p>
+	</button>
+</ListView>

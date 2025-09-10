@@ -1,0 +1,5 @@
+name,description,parameters
+navigate_up,Navigate back to the previous screen or parent section.,{}
+search_labels,Open a search interface to find specific labels.,{}
+create_new_label,Initiate the process of creating a new label.,{}
+create_new_label,Create a new label for setting contacts to favorites.,{}

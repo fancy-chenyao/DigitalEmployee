@@ -1,0 +1,4 @@
+name,description,parameters
+perform_search,Perform a search using the search box.,{'search_query': 'What would you like to search for?'}
+initiate_voice_search,Initiate a voice search using the voice search button.,{}
+navigate_to_discover,Navigate to the Discover section using the navigation button.,{}

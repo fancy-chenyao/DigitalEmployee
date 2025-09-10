@@ -1,0 +1,12 @@
+name,description,parameters
+search_links,Search for links or content using the search bar.,{'search_query': 'What do you want to search for?'}
+open_more_options,Open additional options or settings by long-pressing the 'More options' button.,{}
+navigate_up,Navigate back to the previous screen or parent view.,{}
+select_conversation,Select a conversation to open it.,"{'contact_name': 'Which contact\'s conversation do you want to open? [""Amy"", ""Bob""]'}"
+start_new_chat,Start a new chat or conversation.,{}
+start_chat_with_number,Start a new chat with a specific phone number.,{'phone_number': 'What is the phone number you want to start a chat with?'}
+start_chat_with_number,Start a new chat with the phone number associated with '乐乐'.,"{'phone_number': ""What is the phone number for '乐乐'?""}"
+start_chat_with_contact,Start a new chat with a specific contact name.,{'contact_name': 'What is the name of the contact you want to start a chat with?'}
+start_chat_with_custom_number,Start a new chat with a custom phone number that is not listed in the contacts.,"{'phone_number': 'What is the phone number you want to start a chat with?', 'message': 'What message do you want to send?'}"
+start_chat_with_custom_number,Start a new chat with a custom phone number that is not listed in the contacts.,"{'phone_number': 'What is the phone number you want to start a chat with?', 'message': 'What message do you want to send?'}"
+create_new_contact,Create a new contact with a specific name and phone number.,"{'contact_name': 'What is the name of the contact you want to create?', 'phone_number': 'What is the phone number for the new contact?'}"

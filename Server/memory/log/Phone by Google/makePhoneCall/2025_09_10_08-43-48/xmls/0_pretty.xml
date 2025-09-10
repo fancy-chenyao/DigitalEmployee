@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<div index="0">
+	<div id="root_layout" index="6">
+		<div id="dialpad_fragment_container" index="7"/>
+		<div id="main_screen_coordinator_layout" index="8">
+			<div id="speed_dial_root" index="10">
+				<div id="speed_dial_empty_content_view" index="11">
+					<img id="empty_content_view_animation" index="12"/>
+					<p id="empty_content_view_message" index="13">只需轻轻一点，就能打电话给常用联系人</p>
+					<button text="添加常用联系人" id="empty_content_view_action" index="14"/>
+				</div>
+				<GridView id="speed_dial_recycler_view" index="15"/>
+			</div>
+			<div id="search_fragment_container" index="16"/>
+			<button id="dialpad_fab" description="拨号键盘" index="18"/>
+		</div>
+		<input text="搜索联系人" id="open_search_bar" clickable="true" index="21">
+			<p id="open_search_bar_text_view" index="23">搜索联系人</p>
+			<LinearLayoutCompat index="24">
+				<button id="action_voice" description="开始语音搜索" index="25"/>
+				<button description="更多选项" long-clickable="true" index="26"/>
+			</LinearLayoutCompat>
+		</input>
+		<div index="30">
+			<div id="tab_speed_dial" description="常用联系人" index="31">
+				<div id="navigation_bar_item_content_container" index="32">
+					<div id="navigation_bar_item_icon_container" index="33">
+						<View id="navigation_bar_item_active_indicator_view" index="34"/>
+						<img id="navigation_bar_item_icon_view" index="36"/>
+					</div>
+					<p id="navigation_bar_item_large_label_view" index="38">常用联系人</p>
+				</div>
+			</div>
+			<button id="tab_call_history" description="近期通话" index="39">
+				<div id="navigation_bar_item_content_container" index="40">
+					<img id="navigation_bar_item_icon_view" index="43"/>
+					<p id="navigation_bar_item_small_label_view" index="45">近期通话</p>
+				</div>
+			</button>
+			<button id="tab_contacts" description="联系人" index="46">
+				<div id="navigation_bar_item_content_container" index="47">
+					<img id="navigation_bar_item_icon_view" index="50"/>
+					<p id="navigation_bar_item_small_label_view" index="52">联系人</p>
+				</div>
+			</button>
+			<button id="tab_voicemail" description="语音信箱" index="53">
+				<div id="navigation_bar_item_content_container" index="54">
+					<img id="navigation_bar_item_icon_view" index="57"/>
+					<p id="navigation_bar_item_small_label_view" index="59">语音信箱</p>
+				</div>
+			</button>
+		</div>
+	</div>
+	<View id="navigationBarBackground" index="60"/>
+</div>

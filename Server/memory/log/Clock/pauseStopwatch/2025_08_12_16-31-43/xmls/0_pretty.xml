@@ -1,0 +1,52 @@
+<?xml version="1.0" ?>
+<div id="content" index="6">
+	<div id="toolbar" index="8">
+		<p id="action_bar_title" index="9">Timer</p>
+		<button id="overflow_action_button" description="More options" long-clickable="true" index="11"/>
+	</div>
+	<div id="desk_clock_pager_frame" index="12">
+		<div id="timer_setup" index="16">
+			<p id="timer_setup_time" description="0 hours, 0 minutes, 0 seconds" index="17">00h 00m 00s</p>
+			<div index="19">
+				<button text="1" id="timer_setup_digit_1" index="20"/>
+				<button text="2" id="timer_setup_digit_2" index="21"/>
+				<button text="3" id="timer_setup_digit_3" index="22"/>
+				<button text="4" id="timer_setup_digit_4" index="23"/>
+				<button text="5" id="timer_setup_digit_5" index="24"/>
+				<button text="6" id="timer_setup_digit_6" index="25"/>
+				<button text="7" id="timer_setup_digit_7" index="26"/>
+				<button text="8" id="timer_setup_digit_8" index="27"/>
+				<button text="9" id="timer_setup_digit_9" index="28"/>
+				<button text="00" id="timer_setup_digit_00" index="29"/>
+				<button text="0" id="timer_setup_digit_0" index="30"/>
+				<button text="⌫" id="timer_setup_delete" description="Backspace" long-clickable="true" index="31"/>
+			</div>
+		</div>
+		<div id="fab_container" index="32"/>
+	</div>
+	<div index="34">
+		<button id="tab_menu_alarm" description="Alarm" index="35">
+			<img id="navigation_bar_item_icon_view" index="37"/>
+			<p id="navigation_bar_item_small_label_view" index="39">Alarm</p>
+		</button>
+		<button id="tab_menu_clock" description="Clock" index="40">
+			<img id="navigation_bar_item_icon_view" index="42"/>
+			<p id="navigation_bar_item_small_label_view" index="44">Clock</p>
+		</button>
+		<div id="tab_menu_timer" description="Timer" index="45">
+			<div id="navigation_bar_item_icon_container" index="46">
+				<View id="navigation_bar_item_active_indicator_view" index="47"/>
+				<img id="navigation_bar_item_icon_view" index="48"/>
+			</div>
+			<p id="navigation_bar_item_large_label_view" index="50">Timer</p>
+		</div>
+		<button id="tab_menu_stopwatch" description="Stopwatch" index="51">
+			<img id="navigation_bar_item_icon_view" index="53"/>
+			<p id="navigation_bar_item_small_label_view" index="55">Stopwatch</p>
+		</button>
+		<button id="tab_menu_bedtime" description="Bedtime" index="56">
+			<img id="navigation_bar_item_icon_view" index="58"/>
+			<p id="navigation_bar_item_small_label_view" index="60">Bedtime</p>
+		</button>
+	</div>
+</div>

@@ -1,0 +1,7 @@
+name,description,parameters
+open_account_menu,Open the account menu to access account-related options.,{}
+perform_search,Perform a text-based search using the search box.,{'search_query': 'What would you like to search for?'}
+perform_voice_search,Initiate a voice-based search using the microphone icon.,{}
+perform_camera_search,Initiate a camera-based search using the lens icon.,{}
+navigate_to_section,"Navigate to a specific section of the app (e.g., Discover, Search, Collections, More).","{'section_name': 'Which section would you like to navigate to? [""Discover"", ""Search"", ""Collections"", ""More""]'}"
+copy_text_to_clipboard,Copy a specified text to the device's clipboard.,{'text_to_copy': 'The text that needs to be copied to the clipboard.'}

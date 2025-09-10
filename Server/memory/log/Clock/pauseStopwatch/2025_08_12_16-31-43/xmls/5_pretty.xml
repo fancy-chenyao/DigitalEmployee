@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<div id="content" index="6">
+	<div id="toolbar" index="8">
+		<p id="action_bar_title" index="9">Stopwatch</p>
+		<button id="overflow_action_button" description="More options" long-clickable="true" index="11"/>
+	</div>
+	<div id="desk_clock_pager_frame" index="12">
+		<button id="stopwatch_time_wrapper" index="16">
+			<View id="stopwatch_circle" index="17"/>
+		</button>
+		<div id="fab_container" index="19">
+			<button id="left_button" description="Reset" index="20"/>
+			<button id="fab" description="Start" index="21"/>
+		</div>
+	</div>
+	<div index="23">
+		<button id="tab_menu_alarm" description="Alarm" index="24">
+			<img id="navigation_bar_item_icon_view" index="26"/>
+			<p id="navigation_bar_item_small_label_view" index="28">Alarm</p>
+		</button>
+		<button id="tab_menu_clock" description="Clock" index="29">
+			<img id="navigation_bar_item_icon_view" index="31"/>
+			<p id="navigation_bar_item_small_label_view" index="33">Clock</p>
+		</button>
+		<button id="tab_menu_timer" description="Timer" index="34">
+			<img id="navigation_bar_item_icon_view" index="36"/>
+			<p id="navigation_bar_item_small_label_view" index="38">Timer</p>
+		</button>
+		<div id="tab_menu_stopwatch" description="Stopwatch" index="39">
+			<div id="navigation_bar_item_icon_container" index="40">
+				<View id="navigation_bar_item_active_indicator_view" index="41"/>
+				<img id="navigation_bar_item_icon_view" index="42"/>
+			</div>
+			<p id="navigation_bar_item_large_label_view" index="44">Stopwatch</p>
+		</div>
+		<button id="tab_menu_bedtime" description="Bedtime" index="45">
+			<img id="navigation_bar_item_icon_view" index="47"/>
+			<p id="navigation_bar_item_small_label_view" index="49">Bedtime</p>
+		</button>
+	</div>
+</div>

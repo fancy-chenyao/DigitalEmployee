@@ -1,0 +1,6 @@
+name,description,parameters
+search_photos,Search for photos based on a query or category.,{'search_query': 'What do you want to search for in your photos?'}
+select_category,Select a specific category to view related photos.,"{'category_name': 'Which category do you want to select? [Videos, Favorites, Saved creations]'}"
+navigate_to_tab,Navigate to a specific tab within the app.,"{'tab_name': 'Which tab do you want to navigate to? [Photos, Search]'}"
+open_navigation_drawer,Open the navigation drawer to access additional options.,{}
+enable_backup,Enable backup to improve photo search functionality.,{}

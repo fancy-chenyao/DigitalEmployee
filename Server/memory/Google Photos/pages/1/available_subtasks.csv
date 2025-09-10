@@ -1,0 +1,6 @@
+name,description,parameters
+select_tab,Select a tab to navigate within the app.,"{'tab_name': 'Which tab do you want to select? [""Photos"", ""Search""]'}"
+open_navigation_drawer,Open the navigation drawer to access additional options or settings.,{}
+view_photo,View a specific photo from the collection.,"{'photo_description': 'Which photo do you want to view? (e.g., ""Photo taken on Aug 6, 2025 9:29:50 AM"")'}"
+long_click_photo,Perform a long click on a photo to access additional options like sharing or deleting.,"{'photo_description': 'Which photo do you want to long-click? (e.g., ""Photo taken on Aug 6, 2025 9:29:50 AM"")'}"
+sign_in,Initiate the sign-in process for the account.,{}

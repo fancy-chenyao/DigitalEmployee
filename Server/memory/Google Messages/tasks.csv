@@ -1,0 +1,3 @@
+name,path
+sendMessage,"{""0"": [""start_conversation_with_contact""], ""1"": [""select_contact""], ""2"": [""send_message"", ""finish""]}"
+resendLastMessageToRecipient,"{""4"": [""select_conversation""], ""3"": [""resend_message"", ""send_message"", ""finish""], ""2"": [""select_resend_option""], ""5"": [""resend_selected_message""], ""6"": [""select_contact_to_forward""]}"

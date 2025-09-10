@@ -1,0 +1,6 @@
+name,path
+createContact,"{""1"": [""create_new_contact""], ""2"": [""fill_in_name""], ""3"": [""select_contact_type"", ""finish""]}"
+fillContactFormWithoutSaving,"{""1"": [""create_new_contact""], ""2"": [""fill_in_name"", ""fill_in_phone"", ""select_phone_type""], ""3"": [""finish""]}"
+findAndCallContact,"{""4"": [""call_contact"", ""finish""]}"
+createContactAndCall,"{""1"": [""create_new_contact""], ""2"": [""fill_in_name"", ""fill_in_phone"", ""save_contact""], ""4"": [""call_contact"", ""finish""]}"
+manageContactsAndCall,"{""1"": [""create_new_contact"", ""delete_contact"", ""view_contact_details""], ""2"": [""fill_in_name"", ""fill_in_phone"", ""save_contact""], ""4"": [""navigate_up"", ""add_to_favorites"", ""finish""], ""5"": [""delete_selected_contact""], ""6"": [""confirm_deletion""]}"

@@ -1,0 +1,5 @@
+name,description,parameters
+sign_in,Sign in to the app to enable personalized features like search suggestions and Google Contacts integration.,"{'account_credentials': 'What are your account credentials (e.g., email and password)?'}"
+perform_search,Perform a search by entering a query into the search box.,{'search_query': 'What would you like to search for?'}
+voice_search,Initiate a voice search using the microphone button.,{'voice_input': 'What would you like to say for the voice search?'}
+navigate_up,Navigate up or go back to the previous screen or menu.,{}

@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<div id="content" index="6">
+	<div id="toolbar" index="8">
+		<p id="action_bar_title" index="9">闹钟</p>
+		<button id="overflow_action_button" description="更多选项" long-clickable="true" index="11"/>
+	</div>
+	<div id="desk_clock_pager_frame" index="12">
+		<RecyclerView id="alarm_recycler_view" index="17">
+			<button description="08:30 闹钟" index="18">
+				<div id="alarm_card_layout" index="19">
+					<button text="08:30" id="digital_clock" description="08:30" index="20"/>
+					<button id="arrow" description="展开闹钟" index="21"/>
+					<p id="days_of_week" description="星期一、星期二、星期三、星期四、星期五" index="23">周一、周二、周三、周四、周五</p>
+					<checker id="onoff" clickable="true" index="24" checked="false"/>
+				</div>
+			</button>
+			<button description=" 闹钟" index="25">
+				<div id="alarm_card_layout" index="26">
+					<button text="09:00" id="digital_clock" description="09:00" index="27"/>
+					<button id="arrow" description="展开闹钟" index="28"/>
+					<p id="days_of_week" description="星期日、星期六" index="30">周日、周六</p>
+					<checker id="onoff" clickable="true" index="31" checked="false"/>
+				</div>
+			</button>
+		</RecyclerView>
+		<button id="fab" description="添加闹钟" index="33"/>
+	</div>
+	<div index="35">
+		<div id="tab_menu_alarm" description="闹钟" index="36">
+			<div id="navigation_bar_item_icon_container" index="37">
+				<View id="navigation_bar_item_active_indicator_view" index="38"/>
+				<img id="navigation_bar_item_icon_view" index="39"/>
+			</div>
+			<p id="navigation_bar_item_large_label_view" index="41">闹钟</p>
+		</div>
+		<button id="tab_menu_clock" description="时钟" index="42">
+			<img id="navigation_bar_item_icon_view" index="44"/>
+			<p id="navigation_bar_item_small_label_view" index="46">时钟</p>
+		</button>
+		<button id="tab_menu_timer" description="定时器" index="47">
+			<img id="navigation_bar_item_icon_view" index="49"/>
+			<p id="navigation_bar_item_small_label_view" index="51">定时器</p>
+		</button>
+		<button id="tab_menu_stopwatch" description="秒表" index="52">
+			<img id="navigation_bar_item_icon_view" index="54"/>
+			<p id="navigation_bar_item_small_label_view" index="56">秒表</p>
+		</button>
+		<button id="tab_menu_bedtime" description="就寝时间" index="57">
+			<img id="navigation_bar_item_icon_view" index="59"/>
+			<p id="navigation_bar_item_small_label_view" index="61">就寝时间</p>
+		</button>
+	</div>
+</div>

@@ -1,0 +1,9 @@
+name,description,parameters
+navigate_up,Navigate back to the previous screen or parent view.,{}
+edit_contact,Open the edit mode to modify contact details.,{}
+add_to_favorites,Add the current contact to favorites.,{}
+open_more_options,Open a menu with additional options for the contact.,{}
+call_contact,Initiate a phone call to the selected contact.,{'contact_number': 'Which phone number do you want to call?'}
+send_text_message,Send a text message to the selected contact.,{'contact_number': 'Which phone number do you want to text?'}
+setup_video_call,Set up a video call using Duo for the selected contact.,{}
+open_clock_app,Open the Clock app on the device.,{}

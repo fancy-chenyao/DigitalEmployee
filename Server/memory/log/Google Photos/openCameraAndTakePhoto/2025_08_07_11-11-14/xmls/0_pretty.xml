@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<div id="touch_capture_view" index="5">
+	<div id="photo_container" index="6"/>
+	<div id="toolbar_parent" index="9">
+		<GridView id="recycler_view" index="15">
+			<button index="16">
+				<p id="collection_title" index="17">Pictures</p>
+			</button>
+			<button description="Photo taken on Aug 6, 2025 9:29:50 AM" long-clickable="true" index="18"/>
+		</GridView>
+		<div id="toolbar" index="21">
+			<button description="Show Navigation Drawer" index="22"/>
+			<div id="product_lockup_view" description="Google Photos" index="24">
+				<img id="logo" index="25"/>
+				<p id="product_name" index="26">Photos</p>
+			</div>
+			<button id="selected_account_disc" description="Sign in" index="28">
+				<img id="og_apd_internal_image_view" index="30"/>
+			</button>
+		</div>
+		<div id="tab_layout" index="33">
+			<div id="photos_tabbar_layout" index="34">
+				<button text="Photos" id="tab_photos" index="35"/>
+				<button text="Search" id="search_destination" long-clickable="true" index="36"/>
+			</div>
+			<View id="fill_under_navigation_bar" index="37"/>
+		</div>
+	</div>
+</div>

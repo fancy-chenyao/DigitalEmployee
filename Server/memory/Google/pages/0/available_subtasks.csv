@@ -1,0 +1,5 @@
+name,description,parameters
+open_account_menu,Opens the account menu to access account-related options.,{}
+perform_search,Initiates a search action using text or voice input.,"{'search_type': 'What type of search would you like to perform? [Text search, Voice search]'}"
+perform_camera_search,Initiates a search using the camera feature.,{}
+navigate_to_section,Navigates to a specific section within the app.,"{'section': 'Which section would you like to navigate to? [Discover, Search, Collections, More]'}"

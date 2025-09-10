@@ -1,0 +1,4 @@
+name,description,parameters
+select_option,Select one of the available options from the list.,"{'option': ""Which option do you want to select? ['Details', 'Starred', 'Archive', 'Delete', 'Help & feedback']""}"
+resend_message,Resend the most recently sent message to the selected contact.,"{'contact_name': ""Name of the contact to whom the message should be resent (e.g., 'Amy')"", 'message_text': 'Text of the message to be resent'}"
+resend_selected_message,Resend the currently selected message to the intended contact.,"{'contact_name': ""Name of the contact to whom the message should be resent (e.g., 'Amy')"", 'message_text': ""Text of the message to be resent (e.g., 'HELLO.')""}"

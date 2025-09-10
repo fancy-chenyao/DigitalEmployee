@@ -1,0 +1,4 @@
+name,description,parameters
+select_all_items,Select all items in the list view.,{}
+add_selected_items_to_label,Add the selected items to a label.,{'label_name': 'What is the name of the label you want to add the items to?'}
+navigate_to_contact_details,Navigate to the details screen of a specific contact.,"{'contact_name': 'Name of the contact to navigate to (e.g., Amy)'}"

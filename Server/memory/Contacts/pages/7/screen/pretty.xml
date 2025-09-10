@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<ListView index="2">
+	<button index="3">
+		<p id="title" index="6">Select all</p>
+	</button>
+	<button index="7">
+		<p id="title" index="10">Add to label</p>
+	</button>
+</ListView>

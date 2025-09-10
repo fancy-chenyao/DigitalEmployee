@@ -1,0 +1,10 @@
+name,description,parameters
+select_contact,Select a contact from the contact list to add to the conversation.,{'contact_name': 'Which contact do you want to select?'}
+create_group,Create a new group for the conversation.,{}
+add_recipient,"Add a recipient by typing a name, phone number, or email.","{'recipient_info': 'What is the name, phone number, or email of the recipient you want to add?'}"
+switch_input_mode,Switch between entering text and numbers for recipient input.,{}
+navigate_back,Navigate back to the previous screen or menu.,{}
+add_recipient,"Add a recipient by typing a name, phone number, or email.","{'recipient_info': 'What is the name, phone number, or email of the recipient you want to add?'}"
+send_message,Send a message to the selected contact or recipient.,{'message_text': 'What is the message you want to send?'}
+create_contact,Create a new contact with the given name and phone number.,"{'contact_name': 'Name of the contact to be created', 'contact_number': 'Phone number of the contact to be created'}"
+create_contact,Create a new contact with the given name and phone number.,"{'contact_name': 'Name of the contact to be created', 'contact_number': 'Phone number of the contact to be created'}"

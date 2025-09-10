@@ -1,0 +1,3 @@
+name,description,parameters
+skip_intro,Skip the introduction screen for the Contacts app.,{}
+sign_in,Sign in to a Google Account to access and sync contacts.,"{'account_email': 'What is your Google Account email?', 'account_password': 'What is your Google Account password?'}"

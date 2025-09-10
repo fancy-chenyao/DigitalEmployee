@@ -1,0 +1,2 @@
+name,description,parameters
+confirm_deletion,Confirm whether to delete the contact permanently from the device.,"{'confirmation_choice': 'Do you want to delete the contact permanently from your device? [Delete, Cancel]'}"

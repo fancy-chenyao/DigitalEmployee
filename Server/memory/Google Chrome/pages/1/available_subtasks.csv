@@ -1,0 +1,6 @@
+name,description,parameters
+select_contact,Select a contact from the list to start a new conversation.,{'contact_name': 'Which contact do you want to select?'}
+create_group,Create a new group of contacts.,{}
+input_recipient,"Input a recipient's name, phone number, or email address manually.","{'recipient_info': ""What is the recipient's name, phone number, or email address?""}"
+switch_to_dialpad,Switch between entering text and numbers for input.,{}
+navigate_back,Navigate back to the previous screen or menu.,{}

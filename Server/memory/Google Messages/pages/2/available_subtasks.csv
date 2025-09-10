@@ -1,0 +1,11 @@
+name,description,parameters
+send_message,Send a text message to the current recipient(s).,{'message_text': 'What is the text message you want to send?'}
+add_attachment,"Add an attachment (e.g., image, file, or location) to the message.","{'attachment_type': 'What type of attachment do you want to add? [Camera, Gallery, Files, Location]'}"
+record_audio_message,Record and send an audio message.,{}
+call_recipient,Make a call to the current recipient.,{'recipient_name': 'Who do you want to call?'}
+search_conversation,Search within the conversation or for messages.,{'search_query': 'What do you want to search for in the conversation?'}
+open_more_options,"Open additional conversation options (e.g., delete, forward, etc.).",{}
+add_more_participants,Add more participants to the conversation.,{'participant_names': 'Who would you like to add to the conversation?'}
+view_message_details,View details of a specific message in the conversation.,{'message_timestamp': 'Which message (by timestamp) do you want to view details for?'}
+navigate_back,Navigate back to the previous screen or conversation.,{}
+select_resend_option,Select the 'Resend' option from the context menu for the selected message.,{}

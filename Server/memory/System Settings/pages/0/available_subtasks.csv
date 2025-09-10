@@ -1,0 +1,9 @@
+name,description,parameters
+search_location,Search for a location or place on the map.,{'search_query': 'What location or place would you like to search for?'}
+voice_search,Initiate a voice search for a location or place.,{}
+sign_in,Sign in to the account associated with the app.,{}
+toggle_layers,Toggle or access additional map layers or features.,{}
+navigate_to_tab,Navigate to a specific tab in the app.,"{'tab_name': 'Which tab would you like to navigate to? [Explore, Go, Saved, Contribute, Updates]'}"
+get_directions,Get directions to a destination.,{}
+re_center_map,Re-center the map to your current location.,{}
+adjust_brightness,Adjust the screen brightness to the maximum value.,"{'brightness_level': ""Set the brightness level to 'max' or 'maximum'.""}"

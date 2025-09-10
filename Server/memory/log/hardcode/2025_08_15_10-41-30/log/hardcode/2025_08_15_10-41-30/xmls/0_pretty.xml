@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<div id="status_bar" index="1">
+	<p id="clock" description="02:40" index="2">02:40</p>
+	<img description="Android System notification: " index="3"/>
+	<div id="mobile_combo" description="手机信号满格。" index="4">
+		<img id="mobile_type" description="No internet" index="5"/>
+	</div>
+	<div id="battery" description="电池电量为百分之 100。" index="6"/>
+</div>

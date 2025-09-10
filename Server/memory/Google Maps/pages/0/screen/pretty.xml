@@ -1,0 +1,71 @@
+<?xml version="1.0" ?>
+<div index="0">
+	<div id="mainmap_container" index="6">
+		<button index="8"/>
+		<div id="sidequest_container" index="9"/>
+		<div id="mod_search_omnibox_layout" index="18">
+			<input id="search_omnibox_text_box" description="Search here" clickable="true" index="19">
+				<p index="21">Search here</p>
+			</input>
+			<button description="Voice search" index="24">
+				<View description="Voice search" index="25"/>
+			</button>
+			<button id="selected_account_disc" description="Sign in" index="27">
+				<img id="og_apd_internal_image_view" index="29"/>
+			</button>
+		</div>
+		<RecyclerView id="scrollable_card_stream_container" description="Explore this area" index="33">
+			<p index="42">Latest in the area…</p>
+			<div index="48"/>
+			<div index="54">
+				<div index="59"/>
+				<div index="61"/>
+			</div>
+		</RecyclerView>
+		<button id="layers_fab" description="Layers" index="69">
+			<div id="fab_icon" index="70">
+				<div index="71"/>
+				<div index="73"/>
+			</div>
+		</button>
+		<div index="78">
+			<div id="explore_tab_strip_button" description="Explore" index="79">
+				<div id="navigation_bar_item_icon_container" index="80">
+					<View id="navigation_bar_item_active_indicator_view" index="81"/>
+					<img id="navigation_bar_item_icon_view" index="82"/>
+				</div>
+				<p id="navigation_bar_item_large_label_view" index="84">Explore</p>
+			</div>
+			<button id="transportation_tab_strip_button" description="Go" index="85">
+				<img id="navigation_bar_item_icon_view" index="87"/>
+				<p id="navigation_bar_item_small_label_view" index="89">Go</p>
+			</button>
+			<button id="saved_tab_strip_button" description="Saved" index="90">
+				<img id="navigation_bar_item_icon_view" index="92"/>
+				<p id="navigation_bar_item_small_label_view" index="94">Saved</p>
+			</button>
+			<button id="contribute_tab_strip_button" description="Contribute" index="95">
+				<img id="navigation_bar_item_icon_view" index="97"/>
+				<p id="navigation_bar_item_small_label_view" index="99">Contribute</p>
+			</button>
+			<button id="updates_tab_strip_button" description="Updates" index="100">
+				<img id="navigation_bar_item_icon_view" index="102"/>
+				<p id="navigation_bar_item_small_label_view" index="104">Updates</p>
+			</button>
+		</div>
+		<img id="watermark_image" index="105"/>
+		<button id="on_map_directions_button" description="Directions" index="109">
+			<div id="fab_icon" index="110">
+				<div index="111"/>
+				<div index="113"/>
+			</div>
+		</button>
+		<button id="mylocation_button" description="Re-center map to your location" index="117">
+			<div id="fab_icon" index="118">
+				<div index="119"/>
+				<div index="121"/>
+			</div>
+		</button>
+	</div>
+	<View id="navigationBarBackground" index="123"/>
+</div>
