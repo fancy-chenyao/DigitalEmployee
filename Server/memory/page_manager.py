@@ -22,10 +22,10 @@ class PageManager:
         action_header = ['subtask_name', 'step', 'action', 'example']
         available_subtask_header = ['name', 'description', 'parameters']
 
-        # MongoDB 集合名（按应用与页面拆分）
-        self.subtask_db_path = f"{app}_page_{page_index}_subtasks"
-        self.available_subtask_db_path = f"{app}_page_{page_index}_available_subtasks"
-        self.action_db_path = f"{app}_page_{page_index}_actions"
+        # MongoDB 集合名（简化结构，不再按应用拆分）
+        self.subtask_db_path = f"page_{page_index}_subtasks"
+        self.available_subtask_db_path = f"page_{page_index}_available_subtasks"
+        self.action_db_path = f"page_{page_index}_actions"
 
         self.subtask_db = init_database(self.subtask_db_path, subtask_header)
         self.available_subtask_db = init_database(self.available_subtask_db_path, available_subtask_header)

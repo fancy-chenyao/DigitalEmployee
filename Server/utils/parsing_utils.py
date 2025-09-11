@@ -325,3 +325,180 @@ def save_screen_info(app_name: str, task_name: str, dest_dir: str, screen_num=No
                 os.path.join(dest_dir, "hierarchy.xml"))
     shutil.copy(os.path.join(most_recent_xml_path, f"{index}_parsed.xml"), os.path.join(dest_dir, "parsed.xml"))
     shutil.copy(os.path.join(most_recent_xml_path, f"{index}_pretty.xml"), os.path.join(dest_dir, "pretty.xml"))
+
+
+def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, screen_num=None) -> None:
+    """
+    将屏幕信息保存到MongoDB而不是本地文件系统
+    优先从MongoDB临时存储中读取数据，如果不存在则从本地文件系统读取
+    """
+    import base64
+    from utils.mongo_utils import get_db
+    
+    db = get_db()
+    
+    # 首先尝试从MongoDB临时存储中获取数据
+    temp_screenshots = db['temp_screenshots']
+    temp_xmls = db['temp_xmls']
+    
+    # 查找对应的屏幕截图
+    screenshot_query = {'app_name': app_name, 'task_name': task_name}
+    if screen_num is not None:
+        screenshot_query['screen_count'] = screen_num
+    
+    screenshot_doc = temp_screenshots.find_one(screenshot_query)
+    
+    # 查找对应的XML数据
+    xml_types = ['raw', 'parsed', 'hierarchy', 'encoded']
+    xml_data = {}
+    
+    for xml_type in xml_types:
+        xml_query = {'app_name': app_name, 'task_name': task_name, 'xml_type': xml_type}
+        if screen_num is not None:
+            xml_query['screen_count'] = screen_num
+        xml_doc = temp_xmls.find_one(xml_query)
+        if xml_doc:
+            xml_data[xml_type] = xml_doc['xml_content']
+    
+    # 如果MongoDB中有数据，直接使用
+    if screenshot_doc and xml_data:
+        screen_data = {
+            'page_index': page_index,
+            'app_name': app_name,
+            'task_name': task_name,
+            'screen_num': screenshot_doc.get('screen_count', screen_num),
+            'screenshot': screenshot_doc['screenshot'],
+            'raw_xml': xml_data.get('raw', ''),
+            'html_xml': xml_data.get('encoded', ''),
+            'hierarchy_xml': xml_data.get('hierarchy', ''),
+            'parsed_xml': xml_data.get('parsed', ''),
+            'pretty_xml': xml_data.get('parsed', ''),  # 使用parsed作为pretty的替代
+            'created_at': datetime.now()
+        }
+    else:
+        # 如果MongoDB中没有数据，回退到本地文件系统
+        log(f"Data not found in MongoDB, falling back to local filesystem", "yellow")
+        return save_screen_info_from_local_files(app_name, task_name, page_index, screen_num)
+    
+    # 保存到MongoDB
+    collection = db['screens']
+    collection.replace_one(
+        {'page_index': page_index, 'app_name': app_name, 'task_name': task_name},
+        screen_data,
+        upsert=True
+    )
+    
+    log(f"Screen info saved to MongoDB for page {page_index}", "green")
+
+
+def save_screen_info_from_local_files(app_name: str, task_name: str, page_index: int, screen_num=None) -> None:
+    """
+    从本地文件系统读取屏幕信息并保存到MongoDB（备用方法）
+    """
+    import base64
+    from utils.mongo_utils import get_db
+    
+    def parse_datetime(dirname):
+        return datetime.strptime(dirname, "%Y_%m_%d_%H-%M-%S")
+
+    def get_index(filename):
+        base = os.path.basename(filename)
+        index = int(base.split('.')[0])
+        return index
+
+    base_path = f'memory/log/{app_name}/{task_name}/'
+
+    directories = next(os.walk(base_path))[1]
+
+    datetime_directories = [(parse_datetime(dir), dir) for dir in directories]
+
+    datetime_directories.sort(reverse=True)  # Newest first
+
+    most_recent_log_dir = datetime_directories[0][1]
+    most_recent_screenshot_path = os.path.join(base_path, most_recent_log_dir, "screenshots")
+    most_recent_xml_path = os.path.join(base_path, most_recent_log_dir, "xmls")
+
+    files = [f for f in os.listdir(most_recent_screenshot_path) if f.endswith('.jpg')]
+    indices = [get_index(file) for file in files]
+    if screen_num is not None:
+        index = screen_num
+    else:
+        index = max(indices) if indices else None  # Check if the list is not empty
+
+    # 读取文件并转换为base64编码
+    def read_file_as_base64(file_path):
+        with open(file_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+    
+    def read_file_as_text(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    # 准备要保存的数据
+    screen_data = {
+        'page_index': page_index,
+        'app_name': app_name,
+        'task_name': task_name,
+        'screen_num': index,
+        'screenshot': read_file_as_base64(os.path.join(most_recent_screenshot_path, f"{index}.jpg")),
+        'raw_xml': read_file_as_text(os.path.join(most_recent_xml_path, f"{index}.xml")),
+        'html_xml': read_file_as_text(os.path.join(most_recent_xml_path, f"{index}_encoded.xml")),
+        'hierarchy_xml': read_file_as_text(os.path.join(most_recent_xml_path, f"{index}_hierarchy_parsed.xml")),
+        'parsed_xml': read_file_as_text(os.path.join(most_recent_xml_path, f"{index}_parsed.xml")),
+        'pretty_xml': read_file_as_text(os.path.join(most_recent_xml_path, f"{index}_pretty.xml")),
+        'created_at': datetime.now()
+    }
+    
+    # 保存到MongoDB
+    db = get_db()
+    collection = db['screens']
+    collection.replace_one(
+        {'page_index': page_index, 'app_name': app_name, 'task_name': task_name},
+        screen_data,
+        upsert=True
+    )
+    
+    log(f"Screen info saved to MongoDB from local files for page {page_index}", "green")
+
+
+def get_screen_info_from_mongo(page_index: int, app_name: str = None, task_name: str = None):
+    """
+    从MongoDB获取屏幕信息
+    """
+    from utils.mongo_utils import get_db
+    
+    db = get_db()
+    collection = db['screens']
+    
+    query = {'page_index': page_index}
+    if app_name:
+        query['app_name'] = app_name
+    if task_name:
+        query['task_name'] = task_name
+    
+    screen_data = collection.find_one(query)
+    return screen_data
+
+
+def get_screenshot_from_mongo(page_index: int, app_name: str = None, task_name: str = None):
+    """
+    从MongoDB获取屏幕截图（返回base64解码后的二进制数据）
+    """
+    import base64
+    
+    screen_data = get_screen_info_from_mongo(page_index, app_name, task_name)
+    if screen_data and 'screenshot' in screen_data:
+        return base64.b64decode(screen_data['screenshot'])
+    return None
+
+
+def get_xml_from_mongo(page_index: int, xml_type: str, app_name: str = None, task_name: str = None):
+    """
+    从MongoDB获取XML数据
+    xml_type: 'raw', 'html', 'hierarchy', 'parsed', 'pretty'
+    """
+    screen_data = get_screen_info_from_mongo(page_index, app_name, task_name)
+    if screen_data:
+        xml_field = f"{xml_type}_xml"
+        return screen_data.get(xml_field)
+    return None

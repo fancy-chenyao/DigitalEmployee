@@ -106,6 +106,11 @@ class Server:
                 # dt_string = now.strftime("%Y_%m_%d %H:%M:%S")
                 # log_directory += f'/log/{target_app}/{task["name"]}/{dt_string}/'
                 screen_parser.init(log_directory)
+                
+                # 存储当前任务信息用于后续MongoDB存储
+                self.current_app = target_app
+                self.current_task = task["name"]
+                self.current_log_directory = log_directory
 
                 response = "##$$##" + target_package
                 client_socket.send(response.encode())
@@ -113,7 +118,7 @@ class Server:
 
                 mobileGPT.init(instruction, task, is_new_task)
 
-# 接收屏幕截图（jpg）按字节流完整读取后保存到 ./memory/log/<应用>/<任务>/<时间>/screenshots/0.jpg
+# 接收屏幕截图（jpg）按字节流完整读取后保存到本地临时目录和MongoDB
             elif message_type == 'S':
                 file_info = b''
                 while not file_info.endswith(b'\n'):
@@ -121,7 +126,7 @@ class Server:
                 file_size_str = file_info.decode().strip()
                 file_size = int(file_size_str)
 
-                # save screenshot image
+                # save screenshot image to local temp directory
                 scr_shot_path = os.path.join(log_directory, "screenshots", f"{screen_count}.jpg")
                 with open(scr_shot_path, 'wb') as f:
                     bytes_remaining = file_size
@@ -131,14 +136,26 @@ class Server:
                         image_data += data
                         bytes_remaining -= len(data)
                     f.write(image_data)
+                
+                # 同时保存到MongoDB（用于后续处理）
+                self._save_screenshot_to_mongo(image_data, screen_count)
 
 # 接收当前界面的 XML 布局，保存为 .xml → 用 xmlEncoder 解析出可点击控件 → 交给 MobileGPT 决策下一步动作（如点击、滑动、输入）→ 把动作 JSON 发回手机
             elif message_type == 'X':
                 # 1. 调用工具函数__recv_xml接收并保存XML文件
                 raw_xml = self.__recv_xml(client_socket, screen_count, log_directory)
+                
+                # 同时保存原始XML到MongoDB
+                self._save_xml_to_mongo(raw_xml, screen_count, 'raw')
 
                 # 2. 解析XML：得到结构化控件信息（parsed_xml）、层级结构（hierarchy_xml）、编码XML（encoded_xml）
                 parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(raw_xml, screen_count)
+                
+                # 保存解析后的XML到MongoDB
+                self._save_xml_to_mongo(parsed_xml, screen_count, 'parsed')
+                self._save_xml_to_mongo(hierarchy_xml, screen_count, 'hierarchy')
+                self._save_xml_to_mongo(encoded_xml, screen_count, 'encoded')
+                
                 screen_count += 1  # 屏幕计数递增（下一张截图/XML用新编号）
 
                 # 3. 调用MobileGPT决策下一步动作（如点击按钮、输入文本、滑动）
@@ -187,3 +204,62 @@ class Server:
             raw_xml = string_data.decode().strip().replace("class=\"\"", "class=\"unknown\"")
             f.write(raw_xml)
         return raw_xml
+    
+    def _save_screenshot_to_mongo(self, image_data, screen_count):
+        """将屏幕截图保存到MongoDB"""
+        import base64
+        from utils.mongo_utils import get_db
+        
+        try:
+            db = get_db()
+            collection = db['temp_screenshots']
+            
+            screenshot_data = {
+                'app_name': getattr(self, 'current_app', 'unknown'),
+                'task_name': getattr(self, 'current_task', 'unknown'),
+                'screen_count': screen_count,
+                'screenshot': base64.b64encode(image_data).decode('utf-8'),
+                'created_at': datetime.now()
+            }
+            
+            collection.replace_one(
+                {
+                    'app_name': screenshot_data['app_name'],
+                    'task_name': screenshot_data['task_name'],
+                    'screen_count': screen_count
+                },
+                screenshot_data,
+                upsert=True
+            )
+        except Exception as e:
+            log(f"Failed to save screenshot to MongoDB: {e}", "red")
+    
+    def _save_xml_to_mongo(self, xml_data, screen_count, xml_type):
+        """将XML数据保存到MongoDB"""
+        from utils.mongo_utils import get_db
+        
+        try:
+            db = get_db()
+            collection = db['temp_xmls']
+            
+            xml_doc = {
+                'app_name': getattr(self, 'current_app', 'unknown'),
+                'task_name': getattr(self, 'current_task', 'unknown'),
+                'screen_count': screen_count,
+                'xml_type': xml_type,
+                'xml_content': xml_data,
+                'created_at': datetime.now()
+            }
+            
+            collection.replace_one(
+                {
+                    'app_name': xml_doc['app_name'],
+                    'task_name': xml_doc['task_name'],
+                    'screen_count': screen_count,
+                    'xml_type': xml_type
+                },
+                xml_doc,
+                upsert=True
+            )
+        except Exception as e:
+            log(f"Failed to save XML to MongoDB: {e}", "red")

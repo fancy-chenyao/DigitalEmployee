@@ -27,18 +27,11 @@ class Memory:
         self.task_name = task_name
         self.curr_action_step = 0
 
-        base_database_path = f"./memory/{app}/"
-        if not os.path.exists(base_database_path):
-            os.makedirs(base_database_path)
-
-        # 使用 MongoDB 集合作为持久化目标
-        self.task_db_path = f"{app}_tasks"
-        self.page_path = f"{app}_pages"
-        self.screen_hierarchy_path = f"{app}_hierarchy"
-
-        self.page_database_path = base_database_path + "pages/"
-        if not os.path.exists(self.page_database_path):
-            os.makedirs(self.page_database_path)
+        # 使用 MongoDB 集合作为持久化目标，不再使用本地文件系统
+        self.task_db_path = "tasks"
+        self.page_path = "pages"
+        self.screen_hierarchy_path = "hierarchy"
+        self.screens_path = "screens"  # 用于存储屏幕截图和XML文件
 
         task_header = ['name', 'path']
         page_header = ['index', 'available_subtasks', 'trigger_uis', 'extra_uis', "screen"]
@@ -98,13 +91,8 @@ class Memory:
         self.page_db = pd.concat([self.page_db, pd.DataFrame([new_row])], ignore_index=True)
         save_dataframe(self.page_path, self.page_db)
 
-        page_path = self.page_database_path + f"{new_index}/"
-        page_screen_path = os.path.join(page_path, "screen")
-        if not os.path.exists(page_path):
-            os.makedirs(page_path)
-            if not os.path.exists(page_screen_path):
-                os.makedirs(page_screen_path)
-        parsing_utils.save_screen_info(self.app, self.task_name, page_screen_path, screen_num)
+        # 将屏幕信息保存到MongoDB而不是本地文件系统
+        parsing_utils.save_screen_info_to_mongo(self.app, self.task_name, new_index, screen_num)
 
         return new_index
 
