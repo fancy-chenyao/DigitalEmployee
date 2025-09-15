@@ -1,8 +1,0 @@
-name,description,parameters
-perform_search,Perform a search by typing a query or using voice search.,"{'search_query': 'What do you want to search for?', 'use_voice_search': 'Do you want to use voice search instead of typing?'}"
-navigate_to_website,Navigate to a specific website from the list of suggested sites.,"{'website_name': 'Which website do you want to navigate to? [""百度一下"", ""YouTube"", ""虎扑"", ""Facebook"", ""GitHub"", ""维基百科"", ""V2EX"", ""百度知道""]'}"
-open_discover_options,Open additional options for the Discover section.,{}
-switch_or_close_tabs,Switch between open tabs or close a tab.,{}
-open_more_options,Open more options from the toolbar.,{}
-go_home,Navigate back to the home screen.,{}
-open_file_manager,Open the file manager application to access files and folders on the device.,{}

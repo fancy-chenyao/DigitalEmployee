@@ -1,4 +1,0 @@
-subtask_name,step,action,example
-fill_in_name,4,"{""name"": ""finish"", ""parameters"": {}}",{}
-select_contact_type,0,"{""name"": ""finish"", ""parameters"": {}}",{}
-select_phone_type,1,"{""name"": ""finish"", ""parameters"": {}}",{}

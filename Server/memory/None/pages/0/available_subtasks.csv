@@ -1,7 +1,0 @@
-name,description,parameters
-start_stop_stopwatch,Start or pause the stopwatch.,{}
-reset_stopwatch,Reset the stopwatch to its initial state.,{}
-record_lap,Record a lap time in the stopwatch.,{}
-open_more_options,Open additional options related to the stopwatch.,{}
-switch_tab,"Switch to a different tab (e.g., Alarm, Clock, Timer, Bedtime).","{'tab_name': ""Which tab do you want to switch to? ['Alarm', 'Clock', 'Timer', 'Bedtime']""}"
-open_file_manager,Open the file manager application to navigate and manage files on the Android device.,{}

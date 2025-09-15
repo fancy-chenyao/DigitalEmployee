@@ -256,7 +256,9 @@ class MobileGPT:
             self.current_subtask = None
             self.subtask_status = Status.WAIT
 
-            completion_rate = parse_completion_rate(next_subtask['parameters']['completion_rate'])
+            # Optional completion_rate; default to 0 when not provided
+            if 'completion_rate' in next_subtask['parameters']:
+                _ = parse_completion_rate(next_subtask['parameters']['completion_rate'])
             return self.get_next_action()
 
         elif next_subtask['name'] == 'scroll_screen':

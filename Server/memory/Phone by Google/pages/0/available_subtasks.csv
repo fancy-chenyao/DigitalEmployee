@@ -1,7 +1,0 @@
-name,description,parameters
-search_contacts,Search for contacts or places using a query.,{'search_query': 'What is the name or place you want to search for?'}
-start_voice_search,Initiate a voice search for contacts or places.,{}
-open_dialpad,Open the dialpad to enter a phone number manually.,{}
-select_tab,Switch to a specific tab in the navigation bar.,"{'tab_name': 'Which tab do you want to select? [Favorites, Recents, Contacts, Voicemail]'}"
-call_contact,Call a selected contact from the list.,{'contact_name': 'Whose contact do you want to call?'}
-create_new_contact,Create a new contact entry.,{}

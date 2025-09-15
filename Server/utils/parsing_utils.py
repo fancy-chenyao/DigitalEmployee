@@ -335,7 +335,7 @@ def save_screen_info(app_name: str, task_name: str, dest_dir: str, screen_num=No
     shutil.copy(os.path.join(most_recent_xml_path, f"{index}_pretty.xml"), os.path.join(dest_dir, "pretty.xml"))
 
 
-def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, screen_num=None) -> None:
+def save_screen_info_to_mongo(task_name: str, page_index: int, screen_num=None) -> None:
     """
     将屏幕信息保存到MongoDB而不是本地文件系统
     优先从MongoDB临时存储中读取数据，如果不存在则从本地文件系统读取
@@ -350,7 +350,7 @@ def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, sc
     temp_xmls = db['temp_xmls']
     
     # 查找对应的屏幕截图
-    screenshot_query = {'app_name': app_name, 'task_name': task_name}
+    screenshot_query = {'task_name': task_name}
     if screen_num is not None:
         screenshot_query['screen_count'] = screen_num
     
@@ -361,7 +361,7 @@ def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, sc
     xml_data = {}
     
     for xml_type in xml_types:
-        xml_query = {'app_name': app_name, 'task_name': task_name, 'xml_type': xml_type}
+        xml_query = {'task_name': task_name, 'xml_type': xml_type}
         if screen_num is not None:
             xml_query['screen_count'] = screen_num
         xml_doc = temp_xmls.find_one(xml_query)
@@ -372,7 +372,6 @@ def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, sc
     if screenshot_doc and xml_data:
         screen_data = {
             'page_index': page_index,
-            'app_name': app_name,
             'task_name': task_name,
             'screen_num': screenshot_doc.get('screen_count', screen_num),
             'screenshot': screenshot_doc['screenshot'],
@@ -386,12 +385,12 @@ def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, sc
     else:
         # 如果MongoDB中没有数据，回退到本地文件系统
         log(f"Data not found in MongoDB, falling back to local filesystem", "yellow")
-        return save_screen_info_from_local_files(app_name, task_name, page_index, screen_num)
+        return save_screen_info_from_local_files(task_name, page_index, screen_num)
     
     # 保存到MongoDB
     collection = db['screens']
     collection.replace_one(
-        {'page_index': page_index, 'app_name': app_name, 'task_name': task_name},
+        {'page_index': page_index, 'task_name': task_name},
         screen_data,
         upsert=True
     )
@@ -399,7 +398,7 @@ def save_screen_info_to_mongo(app_name: str, task_name: str, page_index: int, sc
     log(f"Screen info saved to MongoDB for page {page_index}", "green")
 
 
-def save_screen_info_from_local_files(app_name: str, task_name: str, page_index: int, screen_num=None) -> None:
+def save_screen_info_from_local_files(task_name: str, page_index: int, screen_num=None) -> None:
     """
     从本地文件系统读取屏幕信息并保存到MongoDB（备用方法）
     """
@@ -414,11 +413,47 @@ def save_screen_info_from_local_files(app_name: str, task_name: str, page_index:
         index = int(base.split('.')[0])
         return index
 
-    base_path = f'memory/log/{app_name}/{task_name}/'
+    def is_timestamp_dir(name: str) -> bool:
+        try:
+            datetime.strptime(name, "%Y_%m_%d_%H-%M-%S")
+            return True
+        except Exception:
+            return False
 
-    directories = next(os.walk(base_path))[1]
+    # Pick a valid base path with timestamped subdirectories
+    def pick_base_path() -> str:
+        candidates = []
+        # app 维度已移除
+        if task_name:
+            candidates.append(os.path.join('memory', 'log', 'session', task_name))
+        candidates.append(os.path.join('memory', 'log', 'session'))
 
-    datetime_directories = [(parse_datetime(dir), dir) for dir in directories]
+        for path in candidates:
+            if os.path.isdir(path):
+                try:
+                    dirs = next(os.walk(path))[1]
+                except StopIteration:
+                    continue
+                ts_dirs = [d for d in dirs if is_timestamp_dir(d)]
+                if len(ts_dirs) > 0:
+                    return path
+        return ''
+
+    base_path = pick_base_path()
+    if not base_path:
+        log(f"Local filesystem fallback failed: no valid log directory for task='{task_name}'", "red")
+        return
+
+    try:
+        directories = next(os.walk(base_path))[1]
+    except StopIteration:
+        log(f"Local filesystem fallback failed: empty directory '{base_path}'", "red")
+        return
+
+    datetime_directories = [(parse_datetime(dir), dir) for dir in directories if is_timestamp_dir(dir)]
+    if len(datetime_directories) == 0:
+        log(f"Local filesystem fallback failed: no timestamped subdirectories in '{base_path}'", "red")
+        return
 
     datetime_directories.sort(reverse=True)  # Newest first
 
@@ -432,6 +467,9 @@ def save_screen_info_from_local_files(app_name: str, task_name: str, page_index:
         index = screen_num
     else:
         index = max(indices) if indices else None  # Check if the list is not empty
+    if index is None:
+        log(f"Local filesystem fallback failed: no screenshots found in '{most_recent_screenshot_path}'", "red")
+        return
 
     # 读取文件并转换为base64编码
     def read_file_as_base64(file_path):
@@ -445,7 +483,6 @@ def save_screen_info_from_local_files(app_name: str, task_name: str, page_index:
     # 准备要保存的数据
     screen_data = {
         'page_index': page_index,
-        'app_name': app_name,
         'task_name': task_name,
         'screen_num': index,
         'screenshot': read_file_as_base64(os.path.join(most_recent_screenshot_path, f"{index}.jpg")),
@@ -460,16 +497,12 @@ def save_screen_info_from_local_files(app_name: str, task_name: str, page_index:
     # 保存到MongoDB
     db = get_db()
     collection = db['screens']
-    collection.replace_one(
-        {'page_index': page_index, 'app_name': app_name, 'task_name': task_name},
-        screen_data,
-        upsert=True
-    )
+    collection.replace_one({'page_index': page_index, 'task_name': task_name}, screen_data, upsert=True)
     
     log(f"Screen info saved to MongoDB from local files for page {page_index}", "green")
 
 
-def get_screen_info_from_mongo(page_index: int, app_name: str = None, task_name: str = None):
+def get_screen_info_from_mongo(page_index: int, task_name: str = None):
     """
     从MongoDB获取屏幕信息
     """
@@ -479,8 +512,6 @@ def get_screen_info_from_mongo(page_index: int, app_name: str = None, task_name:
     collection = db['screens']
     
     query = {'page_index': page_index}
-    if app_name:
-        query['app_name'] = app_name
     if task_name:
         query['task_name'] = task_name
     
@@ -488,24 +519,24 @@ def get_screen_info_from_mongo(page_index: int, app_name: str = None, task_name:
     return screen_data
 
 
-def get_screenshot_from_mongo(page_index: int, app_name: str = None, task_name: str = None):
+def get_screenshot_from_mongo(page_index: int, task_name: str = None):
     """
     从MongoDB获取屏幕截图（返回base64解码后的二进制数据）
     """
     import base64
     
-    screen_data = get_screen_info_from_mongo(page_index, app_name, task_name)
+    screen_data = get_screen_info_from_mongo(page_index, task_name)
     if screen_data and 'screenshot' in screen_data:
         return base64.b64decode(screen_data['screenshot'])
     return None
 
 
-def get_xml_from_mongo(page_index: int, xml_type: str, app_name: str = None, task_name: str = None):
+def get_xml_from_mongo(page_index: int, xml_type: str, task_name: str = None):
     """
     从MongoDB获取XML数据
     xml_type: 'raw', 'html', 'hierarchy', 'parsed', 'pretty'
     """
-    screen_data = get_screen_info_from_mongo(page_index, app_name, task_name)
+    screen_data = get_screen_info_from_mongo(page_index, task_name)
     if screen_data:
         xml_field = f"{xml_type}_xml"
         return screen_data.get(xml_field)

@@ -1,4 +1,0 @@
-name,description,parameters
-select_contact_to_forward,Select a contact to forward the message to.,{'contact_name': 'Which contact do you want to select to forward the message?'}
-cancel_forwarding,Cancel the current message forwarding action.,{}
-start_new_message,Start composing a new message instead of forwarding.,{}

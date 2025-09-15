@@ -1,6 +1,0 @@
-name,description,parameters
-search_content,Search for images and videos using a query.,{'search_query': 'What do you want to search for?'}
-navigate_up,Navigate back to the previous screen or section.,{}
-open_more_options,Open additional options or settings.,{}
-start_new_conversation,Initiate a new chat or conversation.,{}
-start_conversation_with_contact,Start a new conversation with a specific contact by name.,{'contact_name': 'Name of the contact to start a conversation with.'}

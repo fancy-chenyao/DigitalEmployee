@@ -1,9 +1,0 @@
-<?xml version="1.0" ?>
-<div id="status_bar" index="1">
-	<p id="clock" description="02:43" index="2">02:43</p>
-	<img description="Android 系统通知：已启用序列控制台" index="3"/>
-	<div id="mobile_combo" description="手机信号强度为两格。" index="4">
-		<img id="mobile_type" description="未连接到互联网" index="5"/>
-	</div>
-	<div id="battery" description="电池电量为百分之 100。" index="6"/>
-</div>

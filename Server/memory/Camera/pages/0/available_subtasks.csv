@@ -1,8 +1,0 @@
-name,description,parameters
-perform_search,Perform a search by typing a query or using voice search.,"{'search_query': 'What do you want to search for?', 'use_voice_search': 'Do you want to use voice search instead of typing?'}"
-navigate_to_website,Navigate to a specific website from the list of suggested sites.,"{'website_name': 'Which website do you want to navigate to? [""百度一下"", ""YouTube"", ""虎扑"", ""Facebook"", ""GitHub"", ""维基百科"", ""V2EX"", ""百度知道""]'}"
-open_menu_options,Open the menu options for the Discover section.,{}
-switch_or_close_tabs,Switch between open tabs or close a tab.,"{'action': 'Do you want to switch tabs or close a tab? [""switch"", ""close""]'}"
-open_more_options,Open additional app options or settings.,{}
-go_home,Navigate back to the home screen or main page.,{}
-open_camera,Open the device's camera application or camera feature within the app to take a photo.,{}

@@ -1,5 +1,0 @@
-name,path
-createTimerWithSettings,"{""0"": [""set_timer_duration"", ""finish""]}"
-pauseStopwatch,"{""0"": [""pause_stopwatch"", ""finish""]}"
-startStopwatch,"{""0"": [""start_stopwatch"", ""finish""]}"
-startTimer,"{""0"": [""switch_to_tab"", ""finish""]}"

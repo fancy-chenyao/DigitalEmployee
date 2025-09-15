@@ -1,6 +1,0 @@
-name,description,parameters
-select_hour,Select the hour from the time picker.,{'hour': 'Which hour do you want to select?'}
-select_minute,Select the minute from the time picker.,{'minute': 'Which minute do you want to select?'}
-switch_to_text_input_mode,Switch the time picker to text input mode for manually entering the time.,{}
-cancel_time_selection,Cancel the current time selection and close the time picker.,{}
-confirm_time_selection,Confirm the selected time and close the time picker.,{}

@@ -92,7 +92,7 @@ class Memory:
         save_dataframe(self.page_path, self.page_db)
 
         # 将屏幕信息保存到MongoDB而不是本地文件系统
-        parsing_utils.save_screen_info_to_mongo( self.task_name, new_index, screen_num)
+        parsing_utils.save_screen_info_to_mongo(self.task_name, new_index, screen_num)
 
         return new_index
 

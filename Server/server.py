@@ -208,7 +208,7 @@ class Server:
         return raw_xml
     
     def _save_screenshot_to_mongo(self, image_data, screen_count):
-        """将屏幕截图保存到MongoDB"""
+        """将屏幕截图保存到MongoDB（无 app 维度）"""
         import base64
         from utils.mongo_utils import get_db
         
@@ -217,7 +217,6 @@ class Server:
             collection = db['temp_screenshots']
             
             screenshot_data = {
-                'app_name': getattr(self, 'current_app', 'unknown'),
                 'task_name': getattr(self, 'current_task', 'unknown'),
                 'screen_count': screen_count,
                 'screenshot': base64.b64encode(image_data).decode('utf-8'),
@@ -226,7 +225,6 @@ class Server:
             
             collection.replace_one(
                 {
-                    'app_name': screenshot_data['app_name'],
                     'task_name': screenshot_data['task_name'],
                     'screen_count': screen_count
                 },
@@ -237,7 +235,7 @@ class Server:
             log(f"Failed to save screenshot to MongoDB: {e}", "red")
     
     def _save_xml_to_mongo(self, xml_data, screen_count, xml_type):
-        """将XML数据保存到MongoDB"""
+        """将XML数据保存到MongoDB（无 app 维度）"""
         from utils.mongo_utils import get_db
         
         try:
@@ -245,7 +243,6 @@ class Server:
             collection = db['temp_xmls']
             
             xml_doc = {
-                'app_name': getattr(self, 'current_app', 'unknown'),
                 'task_name': getattr(self, 'current_task', 'unknown'),
                 'screen_count': screen_count,
                 'xml_type': xml_type,
@@ -255,7 +252,6 @@ class Server:
             
             collection.replace_one(
                 {
-                    'app_name': xml_doc['app_name'],
                     'task_name': xml_doc['task_name'],
                     'screen_count': screen_count,
                     'xml_type': xml_type
