@@ -6,7 +6,6 @@ import threading
 from utils.utils import log
 from screenParser.Encoder import xmlEncoder
 from mobilegpt import MobileGPT
-from agents.app_agent import AppAgent
 from agents.task_agent import TaskAgent
 from datetime import datetime
 
@@ -49,7 +48,6 @@ class Server:
         print(f"Connected to client: {client_address}")
 
         mobileGPT = MobileGPT(client_socket)  #MobileGPT主逻辑（决策下一步动作）
-        app_agent = AppAgent()  #应用智能体（管理应用列表、匹配目标应用）
         task_agent = TaskAgent()  #任务智能体（解析用户指令尾结构化任务）
         screen_parser = xmlEncoder()# XML解析器（解析手机界面XML，提取控件信息）
         screen_count = 0  # 屏幕计数（用于截图/XML文件命名，按顺序递增）
@@ -65,18 +63,9 @@ class Server:
             # 将消息类型字节转为字符串（如'L'、'I'、'S'等）
             message_type = raw_message_type.decode()
 
-            # 接收手机已安装 App 列表
+            # 无应用依赖模式：不再接收或处理应用列表
             if message_type == 'L':
-                log("App list is received", "blue")
-
-                # Receive the string
-                package_lists = b''
-                while not package_lists.endswith(b'\n'):
-                    package_lists += client_socket.recv(1)
-                package_lists = package_lists.decode().strip()
-                package_lists = package_lists.split("##")
-
-                app_agent.update_app_list(package_lists)
+                log("App-agnostic mode: ignore app list", "blue")
 
             # 接收用户的自然语言指令，先让 TaskAgent 解析任务 → 再让 AppAgent 预测目标 App → 把包名发回手机
             elif message_type == 'I':  # Instruction
@@ -89,30 +78,22 @@ class Server:
 
                 # 1. TaskAgent解析指令为结构化任务（API格式）
                 task, is_new_task = task_agent.get_task(instruction)
-                target_app = task['app']  # 任务中的目标应用（可能为unknown）
-                if target_app == 'unknown' or target_app == "":
-                    target_app = app_agent.predict_app(instruction)
-                    task['app'] = target_app
+                # 2. 无应用依赖：清空任何潜在的app字段，仅基于指令与页面工作
+                task['app'] = ''
 
-                # 3. 获取目标应用的包名（如“微信”→“com.tencent.mm”）
-                target_package = app_agent.get_package_name(target_app)
-
-                # 4. 创建任务专属日志目录（按应用→任务→时间戳分类，便于追溯）
+                # 4. 创建任务专属日志目录（按会话→任务→时间戳分类，便于追溯）
                 now = datetime.now()
                 # dd/mm/YY H:M:S
                 dt_string = now.strftime("%Y_%m_%d_%H-%M-%S")  # 合法格式：2025_08_06_16-41-57
-                log_directory += f'/log/{target_app}/{task["name"]}/{dt_string}/'
-
-                # dt_string = now.strftime("%Y_%m_%d %H:%M:%S")
-                # log_directory += f'/log/{target_app}/{task["name"]}/{dt_string}/'
+                log_directory += f'/log/session/{task["name"]}/{dt_string}/'
                 screen_parser.init(log_directory)
                 
-                # 存储当前任务信息用于后续MongoDB存储
-                self.current_app = target_app
+                # 存储当前任务信息用于后续MongoDB存储（无应用字段）
                 self.current_task = task["name"]
                 self.current_log_directory = log_directory
 
-                response = "##$$##" + target_package
+                # 与移动端协议保持兼容：仍发送包名字段，但为空
+                response = "##$$##"
                 client_socket.send(response.encode())
                 client_socket.send("\r\n".encode())
 
@@ -127,7 +108,10 @@ class Server:
                 file_size = int(file_size_str)
 
                 # save screenshot image to local temp directory
-                scr_shot_path = os.path.join(log_directory, "screenshots", f"{screen_count}.jpg")
+                screenshots_dir = os.path.join(log_directory, "screenshots")
+                if not os.path.exists(screenshots_dir):
+                    os.makedirs(screenshots_dir)
+                scr_shot_path = os.path.join(screenshots_dir, f"{screen_count}.jpg")
                 with open(scr_shot_path, 'wb') as f:
                     bytes_remaining = file_size
                     image_data = b""
@@ -142,6 +126,21 @@ class Server:
 
 # 接收当前界面的 XML 布局，保存为 .xml → 用 xmlEncoder 解析出可点击控件 → 交给 MobileGPT 决策下一步动作（如点击、滑动、输入）→ 把动作 JSON 发回手机
             elif message_type == 'X':
+                # 若在收到XML前尚未通过指令初始化，则进行会话级初始化
+                if getattr(mobileGPT, 'memory', None) is None:
+                    now = datetime.now()
+                    dt_string = now.strftime("%Y_%m_%d_%H-%M-%S")
+                    # 准备日志目录并初始化解析器
+                    fallback_log_dir = os.path.join(self.memory_directory, f'log/session/{dt_string}/')
+                    log_directory = fallback_log_dir
+                    screen_parser.init(log_directory)
+
+                    # 初始化一个默认任务与内存，避免 NoneType 错误
+                    default_task = {"name": "session", "app": ""}
+                    mobileGPT.init("", default_task, True)
+                    self.current_task = default_task["name"]
+                    self.current_log_directory = log_directory
+
                 # 1. 调用工具函数__recv_xml接收并保存XML文件
                 raw_xml = self.__recv_xml(client_socket, screen_count, log_directory)
                 
@@ -191,7 +190,10 @@ class Server:
         file_size = int(file_size_str)
 
         # 2. 拼接XML保存路径（日志目录/xmls/屏幕计数.xml）
-        raw_xml_path = os.path.join(log_directory, "xmls", f"{screen_count}.xml")
+        xmls_dir = os.path.join(log_directory, "xmls")
+        if not os.path.exists(xmls_dir):
+            os.makedirs(xmls_dir)
+        raw_xml_path = os.path.join(xmls_dir, f"{screen_count}.xml")
 
         # 3. 完整读取XML字节流，修复空class属性（避免后续解析出错）
         with open(raw_xml_path, 'w', encoding='utf-8') as f:

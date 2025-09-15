@@ -1,10 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- 基础颜色 -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- 主题颜色 -->
+    <color name="search_bg">#E3F2FD</color>      <!-- 搜索框背景 -->
+    <color name="nav_bg">#F3E5F5</color>         <!-- 导航栏背景 -->
+    <color name="selected_blue">#2196F3</color>   <!-- 选中状态蓝色 -->
+    <color name="unselected_gray">#757575</color> <!-- 未选中状态灰色 -->
+    
+    <!-- 功能图标颜色 -->
+    <color name="icon_green">#4CAF50</color>      <!-- 绿色图标 -->
+    <color name="icon_orange">#FF9800</color>     <!-- 橙色图标 -->
+    <color name="icon_blue">#2196F3</color>       <!-- 蓝色图标 -->
+    
+    <!-- 文字颜色 -->
+    <color name="text_primary">#212121</color>    <!-- 主要文字 -->
+    <color name="text_secondary">#757575</color>  <!-- 次要文字 -->
+    <color name="text_hint">#BDBDBD</color>       <!-- 提示文字 -->
 </resources>

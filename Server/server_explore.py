@@ -3,7 +3,6 @@ import socket
 import threading
 from datetime import datetime
 
-from agents.app_agent import AppAgent
 from agents.explore_agent import ExploreAgent
 from memory.memory_manager import Memory
 from screenParser.Encoder import xmlEncoder
@@ -50,7 +49,6 @@ class Explorer:
         memory = None
         explore_agent = None
 
-        app_agent = AppAgent()
         screen_parser = xmlEncoder()
         screens = []
 
@@ -64,25 +62,16 @@ class Explorer:
 
             message_type = raw_message_type.decode()
 
+            # 单应用模式：不再处理 A 消息（包名），直接初始化探索环境
             if message_type == 'A':
-                package_name = b''
-                while not package_name.endswith(b'\n'):
-                    package_name += client_socket.recv(1)
-                package_name = package_name.decode().strip()
-                log(f"package name: {package_name}", "blue" )
-                app_name = app_agent.get_app_name(package_name)
-                log(f"App name: {app_name}", "blue")
-                if (package_name == ""):
-                    log("Package name is empty", "red")
-                    return
-
+                log("Single-app mode: ignore package name message", "blue")
+                # 直接初始化探索环境，使用固定会话目录
                 now = datetime.now()
-                # dd/mm/YY H:M:S
                 dt_string = now.strftime("%Y_%m_%d_%H-%M-%S")
-                self.log_directory += f'/log/{app_name}/hardcode/{dt_string}/'
+                self.log_directory += f'/log/session/hardcode/{dt_string}/'
                 screen_parser.init(self.log_directory)
 
-                memory = Memory(app_name, "hardcode", "hardcode")
+                memory = Memory("session", "hardcode", "hardcode")
                 explore_agent = ExploreAgent(memory)
 
 

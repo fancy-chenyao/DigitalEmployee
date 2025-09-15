@@ -303,7 +303,15 @@ def save_screen_info(app_name: str, task_name: str, dest_dir: str, screen_num=No
 
     directories = next(os.walk(base_path))[1]
 
-    datetime_directories = [(parse_datetime(dir), dir) for dir in directories]
+    # 仅选择符合时间戳格式的目录，忽略其他名称（如 autostart 等）
+    def is_timestamp_dir(name: str) -> bool:
+        try:
+            datetime.strptime(name, "%Y_%m_%d_%H-%M-%S")
+            return True
+        except Exception:
+            return False
+
+    datetime_directories = [(parse_datetime(dir), dir) for dir in directories if is_timestamp_dir(dir)]
 
     datetime_directories.sort(reverse=True)  # Newest first
 

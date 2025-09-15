@@ -1,0 +1,279 @@
+package com.example.emplab
+
+import Agent.MobileGPTGlobal
+import Agent.MobileService
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.util.Log
+import android.view.View
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+    
+    private lateinit var navHome: LinearLayout
+    private lateinit var navPeople: LinearLayout
+    private lateinit var navMessage: LinearLayout
+    private lateinit var navProfile: LinearLayout
+    
+    private lateinit var ivNavHome: ImageView
+    private lateinit var ivNavPeople: ImageView
+    private lateinit var ivNavMessage: ImageView
+    private lateinit var ivNavProfile: ImageView
+    
+    private lateinit var tvNavHome: TextView
+    private lateinit var tvNavPeople: TextView
+    private lateinit var tvNavMessage: TextView
+    private lateinit var tvNavProfile: TextView
+    
+    // 悬浮窗管理器
+    private lateinit var floatingWindowManager: FloatingWindowManager
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        // 启动MobileService服务
+        startMobileService()
+        if (!isMobileServiceRunning()) {
+            Log.d("MainActivity", "MobileService服务未运行")
+            Toast.makeText(this, "MobileService服务未运行", Toast.LENGTH_SHORT).show()
+        } else {
+            Log.d("MainActivity", "MobileService服务已运行")
+            Toast.makeText(this, "MobileService服务已运行", Toast.LENGTH_SHORT).show()
+        }
+        initViews()
+        setupNavigation()
+        setupFunctionClicks()
+        setupFloatingWindow()
+
+    }
+    private fun startMobileService() {
+        Log.d("MainActivity", "开始启动MobileService服务")
+        try {
+            val serviceIntent = Intent(this, MobileService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                @Suppress("DEPRECATION")
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "启动MobileService服务时出错: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+    private fun isMobileServiceRunning(): Boolean {
+        val activityManager = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        val services = activityManager.getRunningServices(Integer.MAX_VALUE)
+
+        for (service in services) {
+            if (MobileService::class.java.name == service.service.className) {
+                return true
+            }
+        }
+        return false
+    }
+    private fun isMobileServiceWorking(): Boolean {
+        // 发送一个测试广播检查服务是否响应
+        val intent = Intent(MobileGPTGlobal.STRING_ACTION)
+        intent.putExtra(MobileGPTGlobal.INSTRUCTION_EXTRA, "test")
+        sendBroadcast(intent)
+        return true // 假设发送成功即服务工作正常
+    }
+    private fun initViews() {
+        // 导航栏
+        navHome = findViewById(R.id.nav_home)
+        navPeople = findViewById(R.id.nav_people)
+        navMessage = findViewById(R.id.nav_message)
+        navProfile = findViewById(R.id.nav_profile)
+        
+        ivNavHome = findViewById(R.id.iv_nav_home)
+        ivNavPeople = findViewById(R.id.iv_nav_people)
+        ivNavMessage = findViewById(R.id.iv_nav_message)
+        ivNavProfile = findViewById(R.id.iv_nav_profile)
+        
+        tvNavHome = findViewById(R.id.tv_nav_home)
+        tvNavPeople = findViewById(R.id.tv_nav_people)
+        tvNavMessage = findViewById(R.id.tv_nav_message)
+        tvNavProfile = findViewById(R.id.tv_nav_profile)
+    }
+    
+    private fun setupNavigation() {
+        navHome.setOnClickListener { switchTab(0) }
+        navPeople.setOnClickListener { switchTab(1) }
+        navMessage.setOnClickListener { switchTab(2) }
+        navProfile.setOnClickListener { switchTab(3) }
+        
+        // 默认选中首页
+        switchTab(0)
+    }
+    
+    private fun switchTab(position: Int) {
+        // 重置所有导航项状态
+        resetNavigationState()
+        
+        when (position) {
+            0 -> {
+                // 首页
+                ivNavHome.setImageResource(R.drawable.ic_home)
+                tvNavHome.setTextColor(getColor(R.color.selected_blue))
+                tvNavHome.isSelected = true
+                Toast.makeText(this, "首页", Toast.LENGTH_SHORT).show()
+            }
+            1 -> {
+                // 人员
+                ivNavPeople.setImageResource(R.drawable.ic_people)
+                tvNavPeople.setTextColor(getColor(R.color.selected_blue))
+                tvNavPeople.isSelected = true
+                Toast.makeText(this, "人员", Toast.LENGTH_SHORT).show()
+            }
+            2 -> {
+                // 消息
+                ivNavMessage.setImageResource(R.drawable.ic_message)
+                tvNavMessage.setTextColor(getColor(R.color.selected_blue))
+                tvNavMessage.isSelected = true
+                Toast.makeText(this, "消息", Toast.LENGTH_SHORT).show()
+            }
+            3 -> {
+                // 我的
+                ivNavProfile.setImageResource(R.drawable.ic_profile)
+                tvNavProfile.setTextColor(getColor(R.color.selected_blue))
+                tvNavProfile.isSelected = true
+                Toast.makeText(this, "我的", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    
+    private fun resetNavigationState() {
+        // 重置图标颜色
+        ivNavHome.setImageResource(R.drawable.ic_home)
+        ivNavPeople.setImageResource(R.drawable.ic_people)
+        ivNavMessage.setImageResource(R.drawable.ic_message)
+        ivNavProfile.setImageResource(R.drawable.ic_profile)
+        
+        // 重置文字颜色和选中状态
+        tvNavHome.setTextColor(getColor(R.color.unselected_gray))
+        tvNavPeople.setTextColor(getColor(R.color.unselected_gray))
+        tvNavMessage.setTextColor(getColor(R.color.unselected_gray))
+        tvNavProfile.setTextColor(getColor(R.color.unselected_gray))
+        
+        tvNavHome.isSelected = false
+        tvNavPeople.isSelected = false
+        tvNavMessage.isSelected = false
+        tvNavProfile.isSelected = false
+    }
+    
+    private fun setupFunctionClicks() {
+        // 功能图标点击事件
+        findViewById<View>(R.id.iv_todo).setOnClickListener {
+            Toast.makeText(this, "事务待办", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_calendar).setOnClickListener {
+            Toast.makeText(this, "日程管理", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_learning).setOnClickListener {
+            Toast.makeText(this, "建行学习", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_knowledge).setOnClickListener {
+            Toast.makeText(this, "知识百科", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_benefits).setOnClickListener {
+            Toast.makeText(this, "员工福利", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_travel).setOnClickListener {
+            Toast.makeText(this, "员工差旅", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_leave).setOnClickListener {
+            // 跳转到请假申请页面
+            val intent = Intent(this, LeaveApplicationActivity::class.java)
+            startActivity(intent)
+        }
+        
+        findViewById<View>(R.id.iv_products).setOnClickListener {
+            Toast.makeText(this, "产品服务", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_hr).setOnClickListener {
+            Toast.makeText(this, "人力资源", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_more).setOnClickListener {
+            Toast.makeText(this, "更多功能", Toast.LENGTH_SHORT).show()
+        }
+        
+        // 搜索相关点击事件
+        findViewById<View>(R.id.iv_scan).setOnClickListener {
+            Toast.makeText(this, "扫描功能", Toast.LENGTH_SHORT).show()
+        }
+        
+        findViewById<View>(R.id.iv_robot).setOnClickListener {
+            Toast.makeText(this, "智能助手", Toast.LENGTH_SHORT).show()
+        }
+    }
+    
+    /**
+     * 设置悬浮窗
+     */
+    private fun setupFloatingWindow() {
+        // 初始化悬浮窗管理器
+        floatingWindowManager = FloatingWindowManager(this)
+        
+        // 延迟显示悬浮窗，确保界面完全加载
+        findViewById<View>(android.R.id.content).post {
+            floatingWindowManager.showFloatingWindow()
+        }
+    }
+    
+    /**
+     * 切换悬浮窗显示状态
+     */
+    fun toggleFloatingWindow() {
+        floatingWindowManager.toggleFloatingWindow()
+    }
+    
+    /**
+     * 显示悬浮窗
+     */
+    fun showFloatingWindow() {
+        floatingWindowManager.showFloatingWindow()
+    }
+    
+    /**
+     * 隐藏悬浮窗
+     */
+    fun hideFloatingWindow() {
+        floatingWindowManager.hideFloatingWindow()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // 清理悬浮窗资源
+        floatingWindowManager.cleanup()
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        // 暂停时隐藏悬浮窗
+        if (floatingWindowManager.isFloatingWindowShowing()) {
+            floatingWindowManager.hideFloatingWindow()
+        }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        // 恢复时显示悬浮窗
+        if (!floatingWindowManager.isFloatingWindowShowing()) {
+            floatingWindowManager.showFloatingWindow()
+        }
+    }
+}

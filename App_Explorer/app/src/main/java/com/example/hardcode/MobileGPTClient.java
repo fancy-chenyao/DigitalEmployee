@@ -39,19 +39,8 @@ public class MobileGPTClient {
         }
     }
 
-    public void sendPackageName(String packageName) {
-        try {
-            if (socket != null) {
-                dos.writeByte('A');
-                dos.write((packageName+"\n").getBytes("UTF-8"));
-                dos.flush();
-
-                Log.v(TAG, "package "+packageName+" sent successfully");
-            }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
+    // 单应用模式：不再需要发送包名功能
+    // public void sendPackageName(String packageName) { ... }
 
     public void sendFinish() {
         try {

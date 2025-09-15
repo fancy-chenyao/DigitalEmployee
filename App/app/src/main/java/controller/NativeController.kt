@@ -1,0 +1,773 @@
+package controller
+
+import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.graphics.Rect
+import android.os.SystemClock
+import android.view.KeyEvent
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
+import android.widget.*
+
+object NativeController {
+    
+    /**
+     * 获取页面的元素树
+     */
+    fun getElementTree(activity: Activity, callback: (GenericElement) -> Unit) {
+        val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+        var indexCounter = 0
+        val elementTree = parseView(rootView) { indexCounter++ }
+        callback(elementTree)
+    }
+    
+    /**
+     * 解析视图为GenericElement
+     * @param view 要解析的视图
+     * @param getNextIndex 获取下一个唯一索引的函数
+     */
+    private fun parseView(view: View, getNextIndex: () -> Int): GenericElement {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        
+        // 获取视图文本内容
+        val text = when (view) {
+            is TextView -> view.text.toString()
+            is Button -> view.text.toString()
+            is EditText -> view.text.toString()
+            is CheckBox -> view.text.toString()
+            else -> ""
+        }
+        
+        // 获取内容描述
+        val contentDesc = view.contentDescription?.toString() ?: ""
+
+        // 获取checked状态
+        val checked = when (view) {
+            is CompoundButton -> view.isChecked
+            else -> false
+        }
+
+        // 构建边界矩形
+        val bounds = Rect(
+            location[0],
+            location[1],
+            location[0] + view.width,
+            location[1] + view.height
+        )
+
+        // 构建附加属性
+        val additionalProps = mutableMapOf<String, String>()
+//        if (view.id != View.NO_ID) {
+//            try {
+//                val resourceName = view.resources.getResourceEntryName(view.id)
+//                additionalProps["resourceName"] = resourceName
+//            } catch (e: Exception) {
+//                // 忽略资源找不到的异常
+//            }
+//        }
+        
+        // 处理子视图
+        val children = if (view is ViewGroup && isContainerTraversable(view)) {
+            (0 until view.childCount).map { i -> parseView(view.getChildAt(i), getNextIndex) }
+        } else {
+            emptyList()
+        }
+
+        return GenericElement(
+            resourceId = if (view.id != View.NO_ID) {
+                try {
+                    view.resources.getResourceEntryName(view.id)
+                } catch (e: Exception) {
+                    "view_${view.hashCode()}"
+                }
+            } else {
+                "view_${view.hashCode()}"
+            },
+            className = view.javaClass.name,
+            text = text,
+            contentDesc = contentDesc,
+            bounds = bounds,
+            important = view.isImportantForAccessibility,
+            enabled = view.isEnabled,
+            checked = checked,
+            clickable = view.isClickable,
+            checkable = when (view) {
+                is CompoundButton -> true
+                else -> false
+            },
+            scrollable = when (view) {
+                is ScrollView, is HorizontalScrollView -> true
+                else -> false
+            },
+            longClickable = view.isLongClickable,
+            selected = view.isSelected,
+            index = getNextIndex(),
+            naf = false, // 默认为false，可根据需要调整
+            additionalProps = additionalProps,
+            children = children
+        )
+    }
+    
+    /**
+     * 点击元素（通过元素ID）
+     */
+    fun clickElement(activity: Activity, elementId: String, callback: (Boolean) -> Unit) {
+        val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+        val targetView = findViewByResourceName(rootView, elementId)
+        
+        if (targetView != null && targetView.isEnabled && targetView.isClickable) {
+            targetView.performClick()
+            callback(true)
+        } else {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 通过坐标点击元素
+     * @param activity 当前Activity
+     * @param x 点击的X坐标
+     * @param y 点击的Y坐标
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun clickByCoordinate(activity: Activity, x: Float, y: Float, callback: (Boolean) -> Unit) {
+        try {
+            // 获取整个Activity根视图
+            val rootView = activity.findViewById<View>(android.R.id.content)
+            
+            // 创建ACTION_DOWN事件
+            val downTime = SystemClock.uptimeMillis()
+            val downEvent = MotionEvent.obtain(
+                downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0
+            )
+            
+            // 创建ACTION_UP事件
+            val upTime = SystemClock.uptimeMillis()
+            val upEvent = MotionEvent.obtain(
+                downTime, upTime, MotionEvent.ACTION_UP, x, y, 0
+            )
+            
+            // 从根视图分发触摸事件
+            val downResult = rootView.dispatchTouchEvent(downEvent)
+            Thread.sleep(50) // 短暂延迟模拟真实点击
+            val upResult = rootView.dispatchTouchEvent(upEvent)
+            
+            // 清理事件对象
+            downEvent.recycle()
+            upEvent.recycle()
+            
+            callback(downResult && upResult)
+            
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 设置输入值
+     */
+    fun setInputValue(activity: Activity, elementId: String, text: String, callback: (Boolean) -> Unit) {
+        val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+        val targetView = findViewByResourceName(rootView, elementId)
+        
+        if (targetView is EditText) {
+            targetView.setText(text)
+            callback(true)
+        } else if (targetView is TextView) {
+            // 尝试设置TextView的文本
+            try {
+                targetView.text = text
+                callback(true)
+            } catch (e: Exception) {
+                callback(false)
+            }
+        } else {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 模拟长按操作
+     */
+    fun longClickElement(activity: Activity, elementId: String, callback: (Boolean) -> Unit) {
+        val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+        val targetView = findViewByResourceName(rootView, elementId)
+        
+        if (targetView != null && targetView.isEnabled && targetView.isLongClickable) {
+            targetView.performLongClick()
+            callback(true)
+        } else {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 执行拖拽操作
+     * @param activity 当前Activity
+     * @param startX 起始X坐标
+     * @param startY 起始Y坐标
+     * @param endX 结束X坐标
+     * @param endY 结束Y坐标
+     * @param duration 拖拽持续时间（毫秒）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun dragByCoordinate(
+        activity: Activity,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        duration: Long = 500,
+        callback: (Boolean) -> Unit
+    ) {
+        try {
+            // 获取视图容器
+            val containerView = activity.findViewById<View>(android.R.id.content)
+            
+            val downTime = SystemClock.uptimeMillis()
+            
+            // ACTION_DOWN事件
+            val downEvent = MotionEvent.obtain(
+                downTime, downTime, MotionEvent.ACTION_DOWN, startX, startY, 0
+            )
+            containerView.dispatchTouchEvent(downEvent)
+            
+            // 计算移动步数
+            val steps = (duration / 20).toInt() // 每20ms一步
+            for (i in 1..steps) {
+                val progress = i.toFloat() / steps
+                val currentX = startX + (endX - startX) * progress
+                val currentY = startY + (endY - startY) * progress
+                
+                val moveTime = SystemClock.uptimeMillis()
+                val moveEvent = MotionEvent.obtain(
+                    downTime, moveTime, MotionEvent.ACTION_MOVE, currentX, currentY, 0
+                )
+                containerView.dispatchTouchEvent(moveEvent)
+                moveEvent.recycle()
+                
+                Thread.sleep(20) // 每步间隔20ms
+            }
+            
+            // ACTION_UP事件
+            val upTime = SystemClock.uptimeMillis()
+            val upEvent = MotionEvent.obtain(
+                downTime, upTime, MotionEvent.ACTION_UP, endX, endY, 0
+            )
+            containerView.dispatchTouchEvent(upEvent)
+            
+            // 清理事件对象
+            downEvent.recycle()
+            upEvent.recycle()
+            
+            callback(true)
+            
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 执行滑动/滚动操作
+     * @param activity 当前Activity
+     * @param startX 起始X坐标
+     * @param startY 起始Y坐标
+     * @param endX 结束X坐标
+     * @param endY 结束Y坐标
+     * @param duration 滑动持续时间（毫秒）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun scrollByTouch(
+        activity: Activity,
+        startX: Float,
+        startY: Float,
+        endX: Float,
+        endY: Float,
+        duration: Long = 200,
+        callback: (Boolean) -> Unit
+    ) {
+        try {
+            // 获取视图容器
+            val containerView = activity.findViewById<View>(android.R.id.content)
+            
+            val downTime = SystemClock.uptimeMillis()
+            
+            // ACTION_DOWN
+            val downEvent = MotionEvent.obtain(
+                downTime, downTime, MotionEvent.ACTION_DOWN, startX, startY, 0
+            )
+            containerView.dispatchTouchEvent(downEvent)
+            
+            // 快速滑动的MOVE事件序列
+            val steps = (duration / 20).toInt() // 每20ms一步
+            for (i in 1..steps) {
+                val progress = i.toFloat() / steps
+                val currentX = startX + (endX - startX) * progress
+                val currentY = startY + (endY - startY) * progress
+                
+                val moveTime = SystemClock.uptimeMillis()
+                val moveEvent = MotionEvent.obtain(
+                    downTime, moveTime, MotionEvent.ACTION_MOVE, currentX, currentY, 0
+                )
+                containerView.dispatchTouchEvent(moveEvent)
+                moveEvent.recycle()
+                
+                Thread.sleep(20) // 每步间隔20ms
+            }
+            
+            // ACTION_UP
+            val upTime = SystemClock.uptimeMillis()
+            val upEvent = MotionEvent.obtain(
+                downTime, upTime, MotionEvent.ACTION_UP, endX, endY, 0
+            )
+            containerView.dispatchTouchEvent(upEvent)
+            
+            downEvent.recycle()
+            upEvent.recycle()
+            
+            callback(true)
+            
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 通过坐标激活输入框并输入文本
+     * @param activity 当前Activity
+     * @param inputX 输入框的X坐标
+     * @param inputY 输入框的Y坐标
+     * @param inputContent 要输入的文本内容
+     * @param clearBeforeInput 输入前是否清空现有内容
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun inputTextByCoordinate(
+        activity: Activity,
+        inputX: Float,
+        inputY: Float,
+        inputContent: String,
+        clearBeforeInput: Boolean = true,
+        callback: (Boolean) -> Unit
+    ) {
+        try {
+            // 获取视图容器
+            val containerView = activity.findViewById<View>(android.R.id.content)
+            
+            // 使用clickByCoordinate方法点击坐标激活输入框
+            clickByCoordinate(activity, inputX, inputY) { clickSuccess ->
+                if (!clickSuccess) {
+                    callback(false)
+                    return@clickByCoordinate
+                }
+                
+                try {
+                    // 获取输入法管理器
+                    val inputMethodManager = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                    
+                    // 给软键盘一些时间弹出
+                    Thread.sleep(500)
+                    
+                    // 处理clearBeforeInput参数
+                    if (clearBeforeInput) {
+                        // 全选并删除现有文本
+                        deleteContent(activity, "TEXT_SELECTED") { _ -> }
+                    }
+                    
+                    // 通过KeyEvent模拟软键盘输入文本
+                    for (char in inputContent) {
+                        val keyDownTime = SystemClock.uptimeMillis()
+                        
+                        // 根据字符获取对应的键码
+                        val keyCode = when (char) {
+                            ' ' -> KeyEvent.KEYCODE_SPACE
+                            '\n' -> KeyEvent.KEYCODE_ENTER
+                            in '0'..'9' -> KeyEvent.KEYCODE_0 + (char - '0')
+                            in 'a'..'z' -> KeyEvent.KEYCODE_A + (char - 'a')
+                            in 'A'..'Z' -> KeyEvent.KEYCODE_A + (char - 'A')
+                            else -> KeyEvent.KEYCODE_UNKNOWN
+                        }
+                        
+                        // 创建按键按下事件
+                        val downKeyEvent = if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                            KeyEvent(
+                                keyDownTime,
+                                keyDownTime,
+                                KeyEvent.ACTION_DOWN,
+                                keyCode,
+                                0,
+                                0,
+                                0,
+                                0,
+                                KeyEvent.FLAG_SOFT_KEYBOARD
+                            )
+                        } else {
+                            // 对于特殊字符，使用字符代码
+                            KeyEvent(
+                                keyDownTime,
+                                keyDownTime,
+                                KeyEvent.ACTION_DOWN,
+                                KeyEvent.KEYCODE_UNKNOWN,
+                                0,
+                                0,
+                                0,
+                                char.code,
+                                KeyEvent.FLAG_SOFT_KEYBOARD
+                            )
+                        }
+                        
+                        // 分发按键按下事件到根视图
+                        containerView.dispatchKeyEvent(downKeyEvent)
+                        
+                        // 创建按键抬起事件
+                        val upKeyEvent = if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                            KeyEvent(
+                                keyDownTime,
+                                SystemClock.uptimeMillis(),
+                                KeyEvent.ACTION_UP,
+                                keyCode,
+                                0,
+                                0,
+                                0,
+                                0,
+                                KeyEvent.FLAG_SOFT_KEYBOARD
+                            )
+                        } else {
+                            KeyEvent(
+                                keyDownTime,
+                                SystemClock.uptimeMillis(),
+                                KeyEvent.ACTION_UP,
+                                KeyEvent.KEYCODE_UNKNOWN,
+                                0,
+                                0,
+                                0,
+                                char.code,
+                                KeyEvent.FLAG_SOFT_KEYBOARD
+                            )
+                        }
+                        
+                        // 分发按键抬起事件到根视图
+                        containerView.dispatchKeyEvent(upKeyEvent)
+                        
+                        // 短暂延迟模拟真实的打字速度
+                        Thread.sleep(100)
+                    }
+                    
+                    callback(true)
+                    
+                } catch (e: Exception) {
+                    callback(false)
+                }
+            }
+            
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 执行后退操作
+     * @param activity 当前Activity
+     * @param backType 后退类型（SYSTEM_BACK, APP_CUSTOM_BACK）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun goBack(activity: Activity, backType: String = "SYSTEM_BACK", callback: (Boolean) -> Unit) {
+        try {
+            when (backType) {
+                "SYSTEM_BACK" -> {
+                    // 模拟系统后退键
+                    val downTime = SystemClock.uptimeMillis()
+                    val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK, 0)
+                    val upEvent = KeyEvent(downTime, downTime + 50, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK, 0)
+                    
+                    val rootView = activity.findViewById<View>(android.R.id.content)
+                    val downResult = rootView.dispatchKeyEvent(downEvent)
+                    val upResult = rootView.dispatchKeyEvent(upEvent)
+                    
+                    callback(downResult && upResult)
+                }
+                "APP_CUSTOM_BACK" -> {
+                    // 应用自定义后退逻辑
+                    activity.onBackPressed()
+                    callback(true)
+                }
+                else -> {
+                    // 默认使用系统后退
+                    activity.onBackPressed()
+                    callback(true)
+                }
+            }
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 执行删除操作
+     * @param activity 当前Activity
+     * @param deleteType 删除类型（TEXT_CHAR, TEXT_SELECTED, ITEM_SELECTED）
+     * @param deleteCount 删除数量（仅对TEXT_CHAR有效）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun deleteContent(
+        activity: Activity,
+        deleteType: String,
+        deleteCount: Int = 1,
+        callback: (Boolean) -> Unit
+    ) {
+        try {
+            // 获取整个Activity根视图
+            val rootView = activity.findViewById<View>(android.R.id.content)
+            
+            when (deleteType) {
+                "TEXT_CHAR" -> {
+                    // 删除指定数量的字符
+                    var allSuccess = true
+                    for (i in 1..deleteCount) {
+                        val downTime = SystemClock.uptimeMillis()
+                        val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0)
+                        val upEvent = KeyEvent(downTime, downTime + 50, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL, 0)
+                        
+                        // 分发按键事件到根视图
+                        val downResult = rootView.dispatchKeyEvent(downEvent)
+                        val upResult = rootView.dispatchKeyEvent(upEvent)
+                        
+                        if (!downResult || !upResult) {
+                            allSuccess = false
+                        }
+                        
+                        Thread.sleep(100) // 字符间间隔
+                    }
+                    callback(allSuccess)
+                }
+                "TEXT_SELECTED" -> {
+                    // 删除选中文本
+                    val downTime = SystemClock.uptimeMillis()
+                    val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0)
+                    val upEvent = KeyEvent(downTime, downTime + 50, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL, 0)
+                    
+                    val downResult = rootView.dispatchKeyEvent(downEvent)
+                    val upResult = rootView.dispatchKeyEvent(upEvent)
+                    
+                    callback(downResult && upResult)
+                }
+                "ITEM_SELECTED" -> {
+                    // 删除选中项
+                    val downTime = SystemClock.uptimeMillis()
+                    val downEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0)
+                    val upEvent = KeyEvent(downTime, downTime + 50, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL, 0)
+                    
+                    val downResult = rootView.dispatchKeyEvent(downEvent)
+                    val upResult = rootView.dispatchKeyEvent(upEvent)
+                    
+                    callback(downResult && upResult)
+                }
+                else -> {
+                    callback(false)
+                }
+            }
+            
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 复制内容到剪贴板
+     * @param activity 当前Activity
+     * @param text 要复制的文本内容
+     * @param label 剪贴板标签（可选）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun copyToClipboard(
+        activity: Activity,
+        text: String,
+        label: String = "copied_text",
+        callback: (Boolean) -> Unit
+    ) {
+        try {
+            val clipboardManager = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipData = ClipData.newPlainText(label, text)
+            clipboardManager.setPrimaryClip(clipData)
+            
+            // 验证复制是否成功
+            val copiedText = clipboardManager.primaryClip?.getItemAt(0)?.text?.toString()
+            val success = copiedText == text
+            
+            callback(success)
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 从剪贴板粘贴内容
+     * @param activity 当前Activity
+     * @param targetCoordinateX 目标坐标X（可选，用于坐标粘贴）
+     * @param targetCoordinateY 目标坐标Y（可选，用于坐标粘贴）
+     * @param pasteMode 粘贴模式（FOCUS_PASTE, COORDINATE_PASTE）
+     * @param callback 回调函数，返回粘贴的内容和操作是否成功
+     */
+    fun pasteFromClipboard(
+        activity: Activity,
+        targetCoordinateX: Float? = null,
+        targetCoordinateY: Float? = null,
+        pasteMode: String = "FOCUS_PASTE",
+        callback: (String?, Boolean) -> Unit
+    ) {
+        try {
+            val clipboardManager = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            
+            // 检查剪贴板是否有内容
+            if (!clipboardManager.hasPrimaryClip()) {
+                callback(null, false)
+                return
+            }
+            
+            val clipData = clipboardManager.primaryClip
+            val clipText = clipData?.getItemAt(0)?.text?.toString()
+            
+            if (clipText.isNullOrEmpty()) {
+                callback(null, false)
+                return
+            }
+            
+            when (pasteMode) {
+                "FOCUS_PASTE" -> {
+                    // 在当前焦点位置粘贴
+                    val rootView = activity.findViewById<View>(android.R.id.content)
+                    
+                    // 模拟Ctrl+V粘贴
+                    val downTime = SystemClock.uptimeMillis()
+                    val ctrlDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+                    val vDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_V, KeyEvent.META_CTRL_ON)
+                    val vUpEvent = KeyEvent(downTime, downTime + 50, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_V, KeyEvent.META_CTRL_ON)
+                    val ctrlUpEvent = KeyEvent(downTime, downTime + 100, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+                    
+                    val result1 = rootView.dispatchKeyEvent(ctrlDownEvent)
+                    val result2 = rootView.dispatchKeyEvent(vDownEvent)
+                    val result3 = rootView.dispatchKeyEvent(vUpEvent)
+                    val result4 = rootView.dispatchKeyEvent(ctrlUpEvent)
+                    
+                    val success = result1 && result2 && result3 && result4
+                    callback(clipText, success)
+                }
+                "COORDINATE_PASTE" -> {
+                    // 在指定坐标位置粘贴
+                    if (targetCoordinateX != null && targetCoordinateY != null) {
+                        // 先点击目标坐标激活输入
+                        clickByCoordinate(activity, targetCoordinateX, targetCoordinateY) { clickSuccess ->
+                            if (clickSuccess) {
+                                // 等待输入框激活
+                                Thread.sleep(300)
+                                
+                                // 执行粘贴操作
+                                val rootView = activity.findViewById<View>(android.R.id.content)
+                                val downTime = SystemClock.uptimeMillis()
+                                val ctrlDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+                                val vDownEvent = KeyEvent(downTime, downTime, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_V, KeyEvent.META_CTRL_ON)
+                                val vUpEvent = KeyEvent(downTime, downTime + 50, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_V, KeyEvent.META_CTRL_ON)
+                                val ctrlUpEvent = KeyEvent(downTime, downTime + 100, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_CTRL_LEFT, 0)
+                                
+                                val result1 = rootView.dispatchKeyEvent(ctrlDownEvent)
+                                val result2 = rootView.dispatchKeyEvent(vDownEvent)
+                                val result3 = rootView.dispatchKeyEvent(vUpEvent)
+                                val result4 = rootView.dispatchKeyEvent(ctrlUpEvent)
+                                
+                                val success = result1 && result2 && result3 && result4
+                                callback(clipText, success)
+                            } else {
+                                callback(clipText, false)
+                            }
+                        }
+                    } else {
+                        callback(clipText, false)
+                    }
+                }
+                else -> {
+                    callback(clipText, false)
+                }
+            }
+            
+        } catch (e: Exception) {
+            callback(null, false)
+        }
+    }
+    
+    /**
+     * 返回APP主页
+     * @param activity 当前Activity
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun goToAppHome(activity: Activity, callback: (Boolean) -> Unit) {
+        try {
+            // 清除所有Activity之上的任务栈，使当前Activity成为栈顶Activity
+            val intent = activity.intent
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            activity.startActivity(intent)
+            
+            callback(true)
+        } catch (e: Exception) {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 通过资源名称查找视图
+     */
+    private fun findViewByResourceName(view: View, resourceName: String): View? {
+        if (view.id != View.NO_ID) {
+            try {
+                val name = view.resources.getResourceEntryName(view.id)
+                if (name == resourceName) {
+                    return view
+                }
+            } catch (e: Exception) {
+                // 忽略资源找不到的异常
+            }
+        }
+        
+        // 也尝试通过生成的ID匹配
+        val generatedId = "view_${view.hashCode()}"
+        if (generatedId == resourceName) {
+            return view
+        }
+        
+        if (view is ViewGroup && isContainerTraversable(view)) {
+            for (i in 0 until view.childCount) {
+                val result = findViewByResourceName(view.getChildAt(i), resourceName)
+                if (result != null) {
+                    return result
+                }
+            }
+        }
+        
+        return null
+    }
+    
+    /**
+     * 判断容器是否可遍历
+     */
+    private fun isContainerTraversable(view: View): Boolean {
+        return view.visibility == View.VISIBLE && view.isShown && view.alpha > 0f
+    }
+    
+    /**
+     * 判断视图是否实际可见
+     */
+    private fun isActuallyVisible(view: View): Boolean {
+        if (view.visibility != View.VISIBLE) return false
+        if (!view.isShown) return false
+        if (view.alpha <= 0f) return false
+        if (view.width <= 0 || view.height <= 0) return false
+        val rect = android.graphics.Rect()
+        if (!view.getGlobalVisibleRect(rect)) return false
+        return rect.width() > 0 && rect.height() > 0
+    }
+}

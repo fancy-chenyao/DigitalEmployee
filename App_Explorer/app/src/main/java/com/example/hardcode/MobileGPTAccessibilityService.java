@@ -86,7 +86,7 @@ public class MobileGPTAccessibilityService extends AccessibilityService{
     public void start() {
         reset();
         mExecutorService.execute(this::initNetworkConnection);
-        mExecutorService.execute(()-> mClient.sendPackageName(targetPackageName));
+        // 单应用模式：不再发送包名，直接开始探索
         finalTargetPackageName = targetPackageName;
     }
 

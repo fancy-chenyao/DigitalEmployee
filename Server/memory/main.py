@@ -8,7 +8,6 @@ sys.path.append('.')
 
 load_dotenv()
 os.environ["TASK_AGENT_GPT_VERSION"] = "gpt-4o"
-os.environ["APP_AGENT_GPT_VERSION"] = "gpt-4o"
 os.environ["SELECT_AGENT_HISTORY_GPT_VERSION"] = "gpt-4o"
 os.environ["EXPLORE_AGENT_GPT_VERSION"] = "gpt-4o"
 os.environ["SELECT_AGENT_GPT_VERSION"] = "gpt-4-turbo"
@@ -22,6 +21,10 @@ os.environ["gpt_4_turbo"] = "gpt-4-turbo"
 os.environ["gpt_3_5_turbo"] = "gpt-3.5-turbo"
 
 os.environ["vision_model"] = "gpt-4o"
+# 应用无关模式：不再需要固定应用配置
+for key in ["TARGET_APP_NAME", "TARGET_APP_PACKAGE", "APP_AGENT_GPT_VERSION"]:
+    if key in os.environ:
+        os.environ.pop(key)
 os.environ["MOBILEGPT_USER_NAME"] = "user"
 
 
