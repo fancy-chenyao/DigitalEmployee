@@ -51,7 +51,7 @@ class MobileGPT:
     def init(self, instruction: str, task: dict, is_new_task: bool):
         self.instruction = instruction
         self.task = task
-        self.memory = Memory(task['app'], instruction, task['name'])
+        self.memory = Memory(instruction, task['name'])
         self.explore_agent = ExploreAgent(self.memory)
         self.select_agent = SelectAgent(self.memory, self.instruction)
         self.derive_agent = DeriveAgent(self.memory, self.instruction)
@@ -62,7 +62,7 @@ class MobileGPT:
         if is_new_task:
             self.task_status = Status.LEARN
 
-        log('Mobile Agent Initialized for app: ' + task['app'] + ' / Task: ' + task['name'])
+        log('Mobile Agent Initialized for Task: ' + task['name'])
 
     def get_next_action(self, parsed_xml=None, hierarchy_xml=None, encoded_xml=None):
         log(":::::::::MobileGPT received new screen:::::::::", 'red')

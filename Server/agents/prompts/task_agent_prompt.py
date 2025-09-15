@@ -14,13 +14,11 @@ def get_sys_prompt():
         "beyond what the API description provides.\n\n"
 
         "**Guidelines on how to generate a new API:**\n"
-        "1. Break down the user instruction into a api name and parameters "
-        "combination. The combination should CLEARLY REPRESENT all phrases in the instruction.\n"
-        "2. Find out the name of the app to execute this command, if specified. "
-        "Otherwise, write 'unknown'\n\n"
+        "Break down the user instruction into a api name and parameters "
+        "combination. The combination should CLEARLY REPRESENT all phrases in the instruction.\n\n"
 
         "Respond using the JSON format below. Ensure the response can be parsed by Python json.loads:\n"
-        '{"reasoning":<reasoning>, "found_match": <True or False>,  "api": {"name":<matched_api_name. Suggest new api if there is no match>, "description": <description of what the api intends to do>, "parameters":{"<parameter_name>":<parameter description>,...} "app": "<name of the app to execute this command, if specified. Otherwise, write \'unknown\'>"}}'
+        '{"reasoning":<reasoning>, "found_match": <True or False>,  "api": {"name":<matched_api_name. Suggest new api if there is no match>, "description": <description of what the api intends to do>, "parameters":{"<parameter_name>":<parameter description>,...} }}'
     )
     return sys_msg
 
@@ -33,11 +31,11 @@ def get_usr_prompt(instruction: str, known_tasks: list):
         "User instruction: 'find me an asian restaurant in Las Vegas'\n\n"
 
         "List of known APIs:\n"
-        '1. {"name":"findRestaurantsByLocation", "description": "find restaurants in a specific location.", "parameters":{"location":"The location to search in"}, "app": "TripAdvisor"}\n'
+        '1. {"name":"findRestaurantsByLocation", "description": "find restaurants in a specific location.", "parameters":{"location":"The location to search in"}}\n'
         "...(truncated for brevity)...\n\n"
 
         "Response:\n"
-        '{"reasoning":...(truncated for brevity)..., "found_match": "False",  "api": {"name":"findRestaurantsByCuisineAndLocation", "description": "find restaurants in a specific location based on the type of cuisine", "parameters":{"cuisine_type":"The type of cuisine to search for", "location":"The location to search in"}, "app": "unknown"}}\n'
+        '{"reasoning":...(truncated for brevity)..., "found_match": "False",  "api": {"name":"findRestaurantsByCuisineAndLocation", "description": "find restaurants in a specific location based on the type of cuisine", "parameters":{"cuisine_type":"The type of cuisine to search for", "location":"The location to search in"}}}\n'
         "[END Example #1]\n\n"
 
         # "[Example #2]:\n"
@@ -56,11 +54,11 @@ def get_usr_prompt(instruction: str, known_tasks: list):
         "User instruction: 'send message to Bob saying hello'\n\n"
 
         "List of known APIs:\n"
-        '1. {"name":"sendMessage", "description": "send message to a recipient", "parameters":{"recipient":"recipient of the message"}, "app": "Telegram"}\n'
+        '1. {"name":"sendMessage", "description": "send message to a recipient", "parameters":{"recipient":"recipient of the message"}}\n'
         "...(truncated for brevity)...\n\n"
 
         "Response:\n"
-        '{"reasoning":...(truncated for brevity)..., "found_match": "True",  "api": {"name":"sendMessage", "description": "send message to a recipient", "parameters":{"recipient":"recipient of the message", "message":"content of the message"}, "app": "Telegram"}}\n'
+        '{"reasoning":...(truncated for brevity)..., "found_match": "True",  "api": {"name":"sendMessage", "description": "send message to a recipient", "parameters":{"recipient":"recipient of the message", "message":"content of the message"}}}\n'
         "[END Example #2]\n\n"
 
         "[Your Turn]\n"

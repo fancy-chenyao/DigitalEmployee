@@ -14,9 +14,9 @@ def init_database(collection: str, headers: list):
 
 
 class PageManager:
-    def __init__(self, app, page_index):
+    def __init__(self,  page_index):
         self.page_index = page_index
-        self.app = app
+
 
         subtask_header = ['name', 'description', 'parameters', 'example']
         action_header = ['subtask_name', 'step', 'action', 'example']

@@ -21,8 +21,8 @@ def init_database(path: str, headers: list):
 
 
 class Memory:
-    def __init__(self, app: str, instruction: str, task_name: str):
-        self.app = app
+    def __init__(self, instruction: str, task_name: str):
+
         self.instruction = instruction
         self.task_name = task_name
         self.curr_action_step = 0
@@ -50,7 +50,7 @@ class Memory:
 
     def init_page_manager(self, page_index: int):
         if page_index not in self.page_managers:
-            self.page_managers[page_index] = PageManager(self.app, page_index)
+            self.page_managers[page_index] = PageManager( page_index)
 
         self.page_manager = self.page_managers[page_index]
 
@@ -92,7 +92,7 @@ class Memory:
         save_dataframe(self.page_path, self.page_db)
 
         # 将屏幕信息保存到MongoDB而不是本地文件系统
-        parsing_utils.save_screen_info_to_mongo(self.app, self.task_name, new_index, screen_num)
+        parsing_utils.save_screen_info_to_mongo( self.task_name, new_index, screen_num)
 
         return new_index
 

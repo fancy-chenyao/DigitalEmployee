@@ -15,7 +15,7 @@ class TaskAgent:
     def __init__(self):
         # 使用 MongoDB 集合 'global_tasks' 持久化
         self.collection = 'global_tasks'
-        self.database = load_dataframe(self.collection, ['name', 'description', 'parameters', 'app'])
+        self.database = load_dataframe(self.collection, ['name', 'description', 'parameters']) #应去掉保存的app字段
 
     def get_task(self, instruction) -> (dict, bool):
         known_tasks = self.database.to_dict(orient='records') # 读取已知任务列表
@@ -40,7 +40,7 @@ class TaskAgent:
 
     def update_task(self, task):
         # 匹配任务名和目标应用均相同的记录
-        condition = (self.database['name'] == task['name']) & (self.database['app'] == task['app'])
+        condition = (self.database['name'] == task['name'])  #应去掉匹配条件中的app字段匹配
         index_to_update = self.database.index[condition]
 
         if not index_to_update.empty:
