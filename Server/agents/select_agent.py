@@ -109,6 +109,8 @@ class SelectAgent:
                 return False
 
     def __save_as_example(self, subtask_raw, screen, response):
-        del response['completion_rate']
+        # Optional key: some models may not return completion_rate
+        if 'completion_rate' in response:
+            del response['completion_rate']
         example = {"instruction": self.instruction, "screen": screen, "response": response}
         self.memory.save_subtask(subtask_raw, example)

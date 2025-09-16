@@ -2,7 +2,23 @@ import xml.etree.ElementTree as ET
 
 
 def reformat_xml(xml_string):
-    tree = ET.fromstring(xml_string)
+    # 检查XML字符串是否为空或无效
+    if not xml_string or xml_string.strip() == "":
+        print("Warning: Empty XML string received")
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<hierarchy>
+  <node resource-id="empty" class="Empty" text="Empty XML" clickable="false" enabled="false" bounds="[0,0][0,0]"/>
+</hierarchy>"""
+    
+    try:
+        tree = ET.fromstring(xml_string)
+    except ET.ParseError as e:
+        print(f"XML Parse Error: {e}")
+        print(f"Received XML: {xml_string[:200]}...")  # 只打印前200个字符
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<hierarchy>
+  <node resource-id="parse_error" class="ParseError" text="XML Parse Error" clickable="false" enabled="false" bounds="[0,0][0,0]"/>
+</hierarchy>"""
 
     def process_element(element):
         attrib_text = {

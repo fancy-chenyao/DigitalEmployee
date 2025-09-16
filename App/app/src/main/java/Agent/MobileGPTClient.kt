@@ -89,6 +89,35 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
     }
     
     /**
+     * 发送截图到服务器
+     * @param bitmap 要发送的截图
+     */
+    fun sendScreenshot(bitmap: Bitmap) {
+        Log.d("MobileGPTclient","发送截图")
+        try {
+            socket?.let {
+                dos?.writeByte('S'.code)
+
+                val byteArrayOutputStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+                val byteArray = byteArrayOutputStream.toByteArray()
+
+                val size = byteArray.size
+                val fileSize = "$size\n"
+                dos?.write(fileSize.toByteArray())
+
+                // 发送图片
+                dos?.write(byteArray)
+                dos?.flush()
+
+                Log.v(TAG, "screenshot sent successfully")
+            }
+        } catch (e: IOException) {
+            Log.e(TAG, "server offline")
+        }
+    }
+    
+    /**
      * 发送问答数据到服务器
      * @param qaString 问答字符串
      */

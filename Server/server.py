@@ -163,8 +163,12 @@ class Server:
                 # 4. 若有决策结果，将动作转为JSON发给手机端（加换行符标识结束）
                 if action is not None:
                     message = json.dumps(action)
-                    client_socket.send(message.encode())
-                    client_socket.send("\r\n".encode())
+                    try:
+                        client_socket.send(message.encode())
+                        client_socket.send("\r\n".encode())
+                    except ConnectionAbortedError:
+                        log("Client disconnected during action sending", "yellow")
+                        break
 
 # 接收“问答”结果，如果 GPT 需要补充信息（登录验证码、二次确认），手机端弹窗提问 → 用户回答后回传 → 继续任务
             elif message_type == 'A':

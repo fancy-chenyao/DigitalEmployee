@@ -114,7 +114,9 @@ class MobileGPT:
                 next_subtask = response['action']# 提取选择的子任务
                 if next_subtask['name'] != 'read_screen':
                     msg = response['speak']
-                    self.__send_speak_action(msg)
+                    if not self.__send_speak_action(msg):
+                        # Socket closed by client; stop processing this loop
+                        return None
             # 记录当前子任务数据（页面索引、名称、动作等）
             if self.current_subtask_data:# 若存在上一个子任务数据，添加到任务路径
                 self.task_path.append(self.current_subtask_data)
@@ -230,15 +232,21 @@ class MobileGPT:
         self.current_subtask = None
         self.subtask_status = Status.WAIT
 
-    def __send_speak_action(self, msg) -> None:
+    def __send_speak_action(self, msg) -> bool:
         """
         Send a speak action to the device.
         Args:
             msg: message to be spoken by the device.
         """
         speak_action = {"name": "speak", "parameters": {"message": msg}}  # speak action
-        self.socket.send(json.dumps(speak_action).encode())
-        self.socket.send("\r\n".encode())
+        try:
+            # Send as a single frame to reduce chances of client-side half reads
+            payload = json.dumps(speak_action).encode() + b"\r\n"
+            self.socket.send(payload)
+            return True
+        except Exception as e:
+            log(f"Failed to send speak action: {e}", "red")
+            return False
 
     def __handle_primitive_subtask(self, next_subtask: dict) -> None:
         if next_subtask['name'] == 'finish':
@@ -247,9 +255,8 @@ class MobileGPT:
 
         elif next_subtask['name'] == 'speak':
             msg = next_subtask['parameters']['message']
-            speak_action = {"name": "speak", "parameters": {"message": msg}}  # speak action
-            self.socket.send(json.dumps(speak_action).encode())
-            self.socket.send("\r\n".encode())
+            if not self.__send_speak_action(msg):
+                return None
 
             history = f"Spoke to the user: '{msg}'"
             self.subtask_history.append(history)

@@ -85,6 +85,10 @@ class MobileService : Service() {
                 mExecutorService.execute { 
                     initNetworkConnection()
                     mClient?.sendInstruction(instruction!!)
+                    // 发送指令后启动屏幕更新
+                    mainThreadHandler.post {
+                        startPeriodicScreenUpdate()
+                    }
                 }
             }
         }
@@ -170,8 +174,8 @@ class MobileService : Service() {
         
         Log.d(TAG, "MobileService 初始化完成")
         
-        // 启动定时屏幕更新
-        startPeriodicScreenUpdate()
+        // 不自动启动屏幕更新，等待用户指令
+        // startPeriodicScreenUpdate()
     }
 
     /**
@@ -295,6 +299,31 @@ class MobileService : Service() {
     }
 
     /**
+     * 生成简化的XML
+     * @param activity 当前Activity
+     * @return XML字符串
+     */
+    private fun generateSimpleXML(activity: android.app.Activity): String {
+        val activityName = activity.javaClass.simpleName
+        val packageName = activity.packageName
+        
+        return """<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<hierarchy>
+  <node resource-id="root" class="android.widget.FrameLayout" text="" clickable="false" enabled="true" bounds="[0,0][1080,1920]">
+    <node resource-id="android:id/content" class="android.widget.FrameLayout" text="" clickable="false" enabled="true" bounds="[0,0][1080,1920]">
+      <node resource-id="activity_info" class="android.widget.LinearLayout" text="Activity: $activityName" clickable="false" enabled="true" bounds="[0,0][1080,200]">
+        <node resource-id="package_info" class="android.widget.TextView" text="Package: $packageName" clickable="false" enabled="true" bounds="[10,10][1070,50]"/>
+        <node resource-id="activity_name" class="android.widget.TextView" text="Activity: $activityName" clickable="false" enabled="true" bounds="[10,60][1070,100]"/>
+        <node resource-id="timestamp" class="android.widget.TextView" text="Time: ${System.currentTimeMillis()}" clickable="false" enabled="true" bounds="[10,110][1070,150]"/>
+      </node>
+      <node resource-id="test_button" class="android.widget.Button" text="Test Button" clickable="true" enabled="true" bounds="[100,300][980,400]"/>
+      <node resource-id="test_edit" class="android.widget.EditText" text="" clickable="true" enabled="true" bounds="[100,450][980,550]"/>
+    </node>
+  </node>
+</hierarchy>"""
+    }
+
+    /**
      * 将GenericElement转换为XML字符串
      * @param element 要转换的GenericElement
      * @return XML字符串
@@ -376,6 +405,10 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         screenNeedUpdate = false
         firstScreen = false
         mMobileGPTGlobal = MobileGPTGlobal.reset()
+        
+        // 停止屏幕更新
+        stopPeriodicScreenUpdate()
+        
 //        mainThreadHandler.post {
 //            mSpeech = MobileGPTSpeechRecognizer(this@MobileService)
 //            mAskPopUp = AskPopUp(this@MobileService, mClient!!, mSpeech)
