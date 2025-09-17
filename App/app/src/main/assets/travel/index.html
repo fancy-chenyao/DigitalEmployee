@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>员工差旅</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background-color: #fff;
+            min-height: 100vh;
+        }
+        
+        /* 顶部导航栏 */
+        .nav-bar {
+            background: linear-gradient(135deg, #4A90E2, #357ABD);
+            padding: 20px 16px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            padding: 8px;
+            border-radius: 8px;
+        }
+        
+        .nav-item:hover {
+            transform: translateY(-2px);
+            background-color: rgba(255,255,255,0.1);
+        }
+        
+        .nav-icon {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 8px;
+            filter: brightness(0) invert(1);
+        }
+        
+        .nav-text {
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+        }
+        
+        /* 主要内容区域 */
+        .main-content {
+            padding: 20px 16px;
+        }
+        
+        .section {
+            background-color: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .section-arrow {
+            color: #6c757d;
+            font-size: 18px;
+        }
+        
+        .section-content {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .nav-bar {
+                padding: 16px 12px;
+            }
+            
+            .nav-icon {
+                width: 28px;
+                height: 28px;
+            }
+            
+            .nav-text {
+                font-size: 12px;
+            }
+            
+            .main-content {
+                padding: 16px 12px;
+            }
+        }
+        
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航栏 -->
+        <div class="nav-bar">
+            <div class="nav-item" id="business-trip" onclick="navigateToApplication()">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
+                    </svg>
+                </div>
+                <div class="nav-text">我要出差</div>
+            </div>
+            
+            <div class="nav-item" id="booking" onclick="showToast('预订功能开发中')">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
+                    </svg>
+                </div>
+                <div class="nav-text">我要预订</div>
+            </div>
+            
+            <div class="nav-item" id="reimbursement" onclick="showToast('报销功能开发中')">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z"/>
+                    </svg>
+                </div>
+                <div class="nav-text">我要报销</div>
+            </div>
+            
+            <div class="nav-item" id="todo" onclick="showToast('待办事项功能开发中')">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19,3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3M19,5V19H5V5H19Z"/>
+                        <path d="M17,12H7V10H17V12Z"/>
+                        <path d="M17,16H7V14H17V16Z"/>
+                    </svg>
+                </div>
+                <div class="nav-text">待办事项</div>
+            </div>
+        </div>
+        
+        <!-- 主要内容区域 -->
+        <div class="main-content fade-in">
+            <!-- 我的申请 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">我的申请</div>
+                    <div class="section-arrow">></div>
+                </div>
+                <div class="section-content">当前无申请信息</div>
+            </div>
+            
+            <!-- 我的报销 -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-title">我的报销</div>
+                    <div class="section-arrow">></div>
+                </div>
+                <div class="section-content">当前无报销信息</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('员工差旅页面加载完成');
+        });
+        
+        // 导航到出差申请页面
+        function navigateToApplication() {
+            console.log('导航到出差申请页面');
+            window.location.href = 'application.html';
+        }
+        
+        // 显示提示信息
+        function showToast(message) {
+            console.log('Toast:', message);
+            alert(message);
+        }
+    </script>
+</body>
+</html>

@@ -3,6 +3,7 @@ package com.example.emplab
 import Agent.MobileGPTGlobal
 import Agent.MobileService
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -12,6 +13,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
     
@@ -33,9 +36,16 @@ class MainActivity : AppCompatActivity() {
     // 悬浮窗管理器
     private lateinit var floatingWindowManager: FloatingWindowManager
     
+    // 权限请求码
+    private val PERMISSION_REQUEST_CODE = 1001
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        
+        // 检查并请求必要权限
+        checkAndRequestPermissions()
+        
         // 启动MobileService服务
         startMobileService()
         if (!isMobileServiceRunning()) {
@@ -51,6 +61,61 @@ class MainActivity : AppCompatActivity() {
         setupFloatingWindow()
 
     }
+    
+    /**
+     * 检查并请求必要权限
+     */
+    private fun checkAndRequestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val permissionsNeeded = mutableListOf<String>()
+            
+            // 检查存储权限
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) 
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+            
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE) 
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            
+            // 如果有需要的权限，请求它们
+            if (permissionsNeeded.isNotEmpty()) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    permissionsNeeded.toTypedArray(),
+                    PERMISSION_REQUEST_CODE
+                )
+            }
+        }
+    }
+    
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            var allPermissionsGranted = true
+            
+            for (result in grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allPermissionsGranted = false
+                    break
+                }
+            }
+            
+            if (allPermissionsGranted) {
+                Toast.makeText(this, "权限获取成功", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "部分权限被拒绝，可能影响功能正常使用", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    
     private fun startMobileService() {
         Log.d("MainActivity", "开始启动MobileService服务")
         try {
@@ -190,7 +255,9 @@ class MainActivity : AppCompatActivity() {
         }
         
         findViewById<View>(R.id.iv_travel).setOnClickListener {
-            Toast.makeText(this, "员工差旅", Toast.LENGTH_SHORT).show()
+            // 跳转到员工差旅页面
+            val intent = Intent(this, TravelActivity::class.java)
+            startActivity(intent)
         }
         
         findViewById<View>(R.id.iv_leave).setOnClickListener {

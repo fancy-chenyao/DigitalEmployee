@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出差申请</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background-color: #fff;
+            min-height: 100vh;
+        }
+        
+        /* 顶部标题栏 */
+        .header {
+            background-color: #fff;
+            padding: 16px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .back-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #007bff;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .back-btn:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .header-title {
+            flex: 1;
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        /* 表单区域 */
+        .form-container {
+            padding: 20px 16px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            overflow: hidden;
+        }
+        
+        .form-item {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid #f1f3f4;
+            min-height: 56px;
+        }
+        
+        .form-item:last-child {
+            border-bottom: none;
+        }
+        
+        .form-label {
+            flex: 0 0 120px;
+            font-size: 16px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .form-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            color: #333;
+            background: transparent;
+        }
+        
+        .form-input::placeholder {
+            color: #999;
+        }
+        
+        .form-arrow {
+            color: #999;
+            font-size: 16px;
+            margin-left: 8px;
+        }
+        
+        .form-value {
+            flex: 1;
+            font-size: 16px;
+            color: #333;
+            text-align: right;
+        }
+        
+        .form-value.placeholder {
+            color: #999;
+        }
+        
+        /* 文本域样式 */
+        .textarea-container {
+            padding: 16px;
+        }
+        
+        .form-textarea {
+            width: 100%;
+            min-height: 100px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .form-textarea:focus {
+            border-color: #007bff;
+        }
+        
+        .char-counter {
+            text-align: right;
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        /* 底部按钮 */
+        .bottom-button {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .bottom-button:hover {
+            background-color: #0056b3;
+        }
+        
+        .bottom-button:active {
+            background-color: #004085;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .form-container {
+                padding: 16px 12px;
+            }
+            
+            .form-label {
+                flex: 0 0 100px;
+                font-size: 14px;
+            }
+            
+            .form-input,
+            .form-value {
+                font-size: 14px;
+            }
+        }
+        
+        /* 选择器样式 */
+        .selector-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: none;
+        }
+        
+        .selector-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: white;
+            border-radius: 16px 16px 0 0;
+            max-height: 50vh;
+            overflow: hidden;
+        }
+        
+        .selector-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .selector-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .selector-close {
+            background: none;
+            border: none;
+            font-size: 16px;
+            color: #007bff;
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .selector-content {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .selector-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f3f4;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .selector-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .selector-item:last-child {
+            border-bottom: none;
+        }
+        
+        .selector-item.selected {
+            background-color: #e3f2fd;
+            color: #007bff;
+        }
+        
+        /* 日期选择器样式 */
+        .date-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .date-input:focus {
+            border-color: #007bff;
+        }
+        
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .slide-up {
+            animation: slideUp 0.3s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        
+        /* 自定义对话框样式 */
+        .custom-dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .custom-dialog {
+            background-color: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 320px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            animation: dialogFadeIn 0.3s ease-out;
+        }
+        
+        @keyframes dialogFadeIn {
+            from { opacity: 0; transform: scale(0.9) translateY(-20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        
+        .custom-dialog-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .custom-dialog-message {
+            font-size: 16px;
+            color: #333;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+        
+        .custom-dialog-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .custom-dialog-button {
+            flex: 1;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .custom-dialog-button.primary {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        .custom-dialog-button.primary:hover {
+            background-color: #0056b3;
+        }
+        
+        .custom-dialog-button.secondary {
+            background-color: #f8f9fa;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+        }
+        
+        .custom-dialog-button.secondary:hover {
+            background-color: #e9ecef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部标题栏 -->
+        <div class="header">
+            <button class="back-btn" id="back-btn" onclick="goBack()">←</button>
+            <div class="header-title">出差申请</div>
+        </div>
+        
+        <!-- 表单区域 -->
+        <div class="form-container fade-in">
+            <!-- 出差人 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectTraveler()">
+                    <div class="form-label">出差人(含同行人)</div>
+                    <div class="form-value" id="traveler-value">张博涛</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 出差日期 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectDate()">
+                    <div class="form-label">出差日期</div>
+                    <div class="form-value placeholder" id="date-value">请选择</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 出差性质 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectNature()">
+                    <div class="form-label">出差性质</div>
+                    <div class="form-value placeholder" id="nature-value">请选择</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 费用责任中心 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectCenter()">
+                    <div class="form-label">费用责任中心</div>
+                    <div class="form-value" id="center-value">建行集团金融科技创新中心 (金融科技联</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 是否业务专项 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectSpecial()">
+                    <div class="form-label">是否业务专项</div>
+                    <div class="form-value" id="special-value">否</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 预算项目 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectBudgetProject()">
+                    <div class="form-label">预算项目</div>
+                    <div class="form-value placeholder" id="budget-project-value">请选择</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 预算事项 -->
+            <div class="form-group">
+                <div class="form-item" onclick="selectBudgetMatter()">
+                    <div class="form-label">预算事项</div>
+                    <div class="form-value placeholder" id="budget-matter-value">请选择</div>
+                    <div class="form-arrow">></div>
+                </div>
+            </div>
+            
+            <!-- 出差事由 -->
+            <div class="form-group">
+                <div class="textarea-container">
+                    <div class="form-label" style="margin-bottom: 8px;">出差事由</div>
+                    <textarea 
+                        class="form-textarea" 
+                        id="reason-textarea" 
+                        placeholder="请输入出差事由"
+                        maxlength="200"
+                        oninput="updateCharCounter()"></textarea>
+                    <div class="char-counter" id="char-counter">(0/200)</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 底部按钮 -->
+        <button class="bottom-button" id="submit-btn">提交</button>
+    </div>
+    
+    <!-- 选择器覆盖层 -->
+    <div class="selector-overlay" id="selector-overlay" onclick="closeSelector()">
+        <div class="selector-container slide-up" id="selector-container" onclick="event.stopPropagation()">
+            <div class="selector-header">
+                <div class="selector-title" id="selector-title">请选择</div>
+                <button class="selector-close" onclick="closeSelector()">取消</button>
+            </div>
+            <div class="selector-content" id="selector-content">
+                <!-- 动态内容 -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- 自定义对话框 -->
+    <div class="custom-dialog-overlay" id="custom-dialog-overlay">
+        <div class="custom-dialog" id="custom-dialog">
+            <div class="custom-dialog-title" id="dialog-title">提示</div>
+            <div class="custom-dialog-message" id="dialog-message">消息内容</div>
+            <div class="custom-dialog-buttons" id="dialog-buttons">
+                <!-- 动态按钮 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('出差申请页面加载完成');
+            // 初始化字符计数器
+            updateCharCounter();
+            
+            // 测试按钮点击事件
+            const submitBtn = document.getElementById('submit-btn');
+            if (submitBtn) {
+                console.log('提交按钮找到，添加事件监听器');
+                submitBtn.addEventListener('click', function(e) {
+                    console.log('按钮点击事件触发');
+                    e.preventDefault();
+                    submitApplication();
+                });
+            } else {
+                console.log('提交按钮未找到');
+            }
+        });
+        
+        // 返回上一页
+        function goBack() {
+            console.log('返回上一页');
+            window.history.back();
+        }
+        
+        // 提交申请
+        function submitApplication() {
+            console.log('提交申请函数被调用');
+            
+            // 显示确认对话框
+            showSubmitConfirmDialog();
+        }
+        
+        
+        // 显示提交确认对话框
+        function showSubmitConfirmDialog() {
+            showCustomConfirm('确认提交', '确定要提交出差申请吗？', function() {
+                // 用户确认提交
+                submitFormData();
+            });
+        }
+        
+        // 提交表单数据
+        function submitFormData() {
+            // 收集表单数据
+            const formData = {
+                traveler: document.getElementById('traveler-value').textContent,
+                date: document.getElementById('date-value').textContent,
+                nature: document.getElementById('nature-value').textContent,
+                center: document.getElementById('center-value').textContent,
+                special: document.getElementById('special-value').textContent,
+                budgetProject: document.getElementById('budget-project-value').textContent,
+                budgetMatter: document.getElementById('budget-matter-value').textContent,
+                reason: document.getElementById('reason-textarea').value
+            };
+            
+            console.log('表单数据:', formData);
+            
+            // 显示提交成功消息
+            showSuccessDialog();
+        }
+        
+        // 显示成功对话框
+        function showSuccessDialog() {
+            showCustomAlert('提交成功', '您的出差申请已提交，请等待审核。', function() {
+                // 返回上一页
+                goBack();
+            });
+        }
+        
+        // 自定义对话框函数
+        function showCustomAlert(title, message, onConfirm) {
+            const overlay = document.getElementById('custom-dialog-overlay');
+            const dialogTitle = document.getElementById('dialog-title');
+            const dialogMessage = document.getElementById('dialog-message');
+            const dialogButtons = document.getElementById('dialog-buttons');
+            
+            dialogTitle.textContent = title;
+            dialogMessage.textContent = message;
+            
+            // 创建确定按钮
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'custom-dialog-button primary';
+            confirmBtn.textContent = '确定';
+            confirmBtn.onclick = function() {
+                closeCustomDialog();
+                if (onConfirm) onConfirm();
+            };
+            
+            dialogButtons.innerHTML = '';
+            dialogButtons.appendChild(confirmBtn);
+            
+            overlay.style.display = 'flex';
+        }
+        
+        function showCustomConfirm(title, message, onConfirm) {
+            const overlay = document.getElementById('custom-dialog-overlay');
+            const dialogTitle = document.getElementById('dialog-title');
+            const dialogMessage = document.getElementById('dialog-message');
+            const dialogButtons = document.getElementById('dialog-buttons');
+            
+            dialogTitle.textContent = title;
+            dialogMessage.textContent = message;
+            
+            // 创建取消按钮
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'custom-dialog-button secondary';
+            cancelBtn.textContent = '取消';
+            cancelBtn.onclick = function() {
+                closeCustomDialog();
+            };
+            
+            // 创建确定按钮
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'custom-dialog-button primary';
+            confirmBtn.textContent = '确定';
+            confirmBtn.onclick = function() {
+                closeCustomDialog();
+                if (onConfirm) onConfirm();
+            };
+            
+            dialogButtons.innerHTML = '';
+            dialogButtons.appendChild(cancelBtn);
+            dialogButtons.appendChild(confirmBtn);
+            
+            overlay.style.display = 'flex';
+        }
+        
+        function closeCustomDialog() {
+            document.getElementById('custom-dialog-overlay').style.display = 'none';
+        }
+        
+        // 改进的Toast提示函数
+        function showToast(message) {
+            // 创建Toast元素
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 16px;
+                z-index: 10000;
+                max-width: 80%;
+                text-align: center;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            `;
+            toast.textContent = message;
+            
+            // 添加到页面
+            document.body.appendChild(toast);
+            
+            // 2秒后自动移除
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 2000);
+        }
+        
+        // 更新字符计数器
+        function updateCharCounter() {
+            const textarea = document.getElementById('reason-textarea');
+            const counter = document.getElementById('char-counter');
+            const currentLength = textarea.value.length;
+            const maxLength = 200;
+            
+            counter.textContent = `(${currentLength}/${maxLength})`;
+            
+            // 如果超过限制，改变颜色
+            if (currentLength > maxLength) {
+                counter.style.color = '#dc3545';
+            } else {
+                counter.style.color = '#999';
+            }
+        }
+        
+        // 选择器相关功能
+        function showSelector(title, items, currentValue, onSelect) {
+            const overlay = document.getElementById('selector-overlay');
+            const selectorTitle = document.getElementById('selector-title');
+            const selectorContent = document.getElementById('selector-content');
+            
+            selectorTitle.textContent = title;
+            selectorContent.innerHTML = '';
+            
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'selector-item';
+                if (item === currentValue) {
+                    div.classList.add('selected');
+                }
+                div.textContent = item;
+                div.onclick = function() {
+                    onSelect(item);
+                    closeSelector();
+                };
+                selectorContent.appendChild(div);
+            });
+            
+            overlay.style.display = 'block';
+        }
+        
+        function closeSelector() {
+            document.getElementById('selector-overlay').style.display = 'none';
+        }
+        
+        // 选择出差人
+        function selectTraveler() {
+            const travelers = ['张博涛', '李小明', '王小红', '赵大伟', '陈小芳'];
+            const currentValue = document.getElementById('traveler-value').textContent;
+            
+            showSelector('选择出差人', travelers, currentValue, function(selected) {
+                document.getElementById('traveler-value').textContent = selected;
+                document.getElementById('traveler-value').classList.remove('placeholder');
+            });
+        }
+        
+        // 选择出差日期
+        function selectDate() {
+            const today = new Date();
+            const dates = [];
+            
+            // 生成未来30天的日期选项
+            for (let i = 0; i < 30; i++) {
+                const date = new Date(today);
+                date.setDate(today.getDate() + i);
+                const dateStr = date.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                });
+                dates.push(dateStr);
+            }
+            
+            const currentValue = document.getElementById('date-value').textContent;
+            
+            showSelector('选择出差日期', dates, currentValue, function(selected) {
+                document.getElementById('date-value').textContent = selected;
+                document.getElementById('date-value').classList.remove('placeholder');
+            });
+        }
+        
+        // 选择出差性质
+        function selectNature() {
+            const natures = ['商务出差', '培训学习', '会议参加', '客户拜访', '项目调研', '其他'];
+            const currentValue = document.getElementById('nature-value').textContent;
+            
+            showSelector('选择出差性质', natures, currentValue, function(selected) {
+                document.getElementById('nature-value').textContent = selected;
+                document.getElementById('nature-value').classList.remove('placeholder');
+            });
+        }
+        
+        // 选择费用责任中心
+        function selectCenter() {
+            const centers = [
+                '建行集团金融科技创新中心 (金融科技联)',
+                '建行集团信息技术部',
+                '建行集团人力资源部',
+                '建行集团财务部',
+                '建行集团市场部'
+            ];
+            const currentValue = document.getElementById('center-value').textContent;
+            
+            showSelector('选择费用责任中心', centers, currentValue, function(selected) {
+                document.getElementById('center-value').textContent = selected;
+            });
+        }
+        
+        // 选择是否业务专项
+        function selectSpecial() {
+            const options = ['是', '否'];
+            const currentValue = document.getElementById('special-value').textContent;
+            
+            showSelector('是否业务专项', options, currentValue, function(selected) {
+                document.getElementById('special-value').textContent = selected;
+            });
+        }
+        
+        // 选择预算项目
+        function selectBudgetProject() {
+            const projects = ['差旅费', '培训费', '会议费', '交通费', '住宿费', '其他'];
+            const currentValue = document.getElementById('budget-project-value').textContent;
+            
+            showSelector('选择预算项目', projects, currentValue, function(selected) {
+                document.getElementById('budget-project-value').textContent = selected;
+                document.getElementById('budget-project-value').classList.remove('placeholder');
+            });
+        }
+        
+        // 选择预算事项
+        function selectBudgetMatter() {
+            const matters = ['日常运营', '项目开发', '人员培训', '客户维护', '市场拓展', '其他'];
+            const currentValue = document.getElementById('budget-matter-value').textContent;
+            
+            showSelector('选择预算事项', matters, currentValue, function(selected) {
+                document.getElementById('budget-matter-value').textContent = selected;
+                document.getElementById('budget-matter-value').classList.remove('placeholder');
+            });
+        }
+    </script>
+</body>
+</html>

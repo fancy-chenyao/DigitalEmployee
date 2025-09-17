@@ -6,8 +6,18 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    
+    <!-- 存储权限适配Android API 33 -->
+    <!-- Android 12及以下版本的传统存储权限 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    
+    <!-- Android 13+ (API 33+) 细分媒体权限 -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 
     <application
         android:name=".MainApplication"
@@ -48,12 +58,19 @@
             android:exported="false"
             android:label="请休假申请"
             android:theme="@style/Theme.EmpLab" />
+            
+        <activity
+            android:name=".TravelActivity"
+            android:exported="false"
+            android:label="员工差旅"
+            android:theme="@style/Theme.EmpLab" />
 
         <service
             android:name="Agent.MobileService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        
     </application>
 
 </manifest>

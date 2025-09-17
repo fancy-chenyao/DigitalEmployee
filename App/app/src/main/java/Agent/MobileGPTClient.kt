@@ -64,30 +64,31 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
             Log.e(TAG, "server offline")
         }
     }
-    /**
-     * 发送XML数据到服务器
-     * @param xml 要发送的XML字符串
-     */
-    fun sendXML(xml: String) {
-        Log.d("MobileGPTclient","发送XML")
-        try {
-            socket?.let {
-                dos?.writeByte('X'.code)
-                val size = xml.toByteArray(Charsets.UTF_8).size
-                val fileSize = "$size\n"
-                dos?.write(fileSize.toByteArray())
+    // fun sendScreenshot(bitmap: Bitmap) {
+    //     try {
+    //         socket?.let {
+    //             dos?.writeByte('S'.code)
 
-                // 发送xml
-                dos?.write(xml.toByteArray(StandardCharsets.UTF_8))
-                dos?.flush()
+    //             val byteArrayOutputStream = ByteArrayOutputStream()
+    //             bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+    //             val byteArray = byteArrayOutputStream.toByteArray()
 
-                Log.v(TAG, "xml sent successfully")
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "server offline")
-        }
-    }
-    
+    //             val size = byteArray.size
+    //             val fileSize = "$size\n"
+    //             dos?.write(fileSize.toByteArray())
+
+    //             // 发送图片
+    //             dos?.write(byteArray)
+    //             dos?.flush()
+
+    //             Log.v(Agent.MobileGPTClient.Companion.TAG, "screenshot sent successfully")
+    //         }
+    //     } catch (e: IOException) {
+    //         Log.e(Agent.MobileGPTClient.Companion.TAG, "server offline")
+    //     }
+    // }
+
+
     /**
      * 发送截图到服务器
      * @param bitmap 要发送的截图
@@ -111,6 +112,31 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
                 dos?.flush()
 
                 Log.v(TAG, "screenshot sent successfully")
+            }
+        } catch (e: IOException) {
+            Log.e(TAG, "server offline")
+        }
+    }
+    
+
+    /**
+     * 发送XML数据到服务器
+     * @param xml 要发送的XML字符串
+     */
+    fun sendXML(xml: String) {
+        Log.d("MobileGPTclient","发送XML")
+        try {
+            socket?.let {
+                dos?.writeByte('X'.code)
+                val size = xml.toByteArray(Charsets.UTF_8).size
+                val fileSize = "$size\n"
+                dos?.write(fileSize.toByteArray())
+
+                // 发送xml
+                dos?.write(xml.toByteArray(StandardCharsets.UTF_8))
+                dos?.flush()
+
+                Log.v(TAG, "xml sent successfully")
             }
         } catch (e: IOException) {
             Log.e(TAG, "server offline")

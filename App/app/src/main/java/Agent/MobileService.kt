@@ -23,6 +23,10 @@ import android.view.Display
 import android.view.WindowManager
 //import Agent.AskPopUp
 import Agent.GPTMessage
+import android.accessibilityservice.AccessibilityService.ScreenshotResult
+import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
+import android.app.Activity
+import android.view.PixelCopy
 import org.json.JSONException
 import java.io.File
 import java.io.IOException
@@ -174,8 +178,10 @@ class MobileService : Service() {
         
         Log.d(TAG, "MobileService 初始化完成")
         
-        // 不自动启动屏幕更新，等待用户指令
-        // startPeriodicScreenUpdate()
+        // // 延迟启动定时屏幕更新，等待Activity准备就绪
+        // mainThreadHandler.postDelayed({
+        //     startPeriodicScreenUpdate()
+        // }, 2000) // 延迟2秒启动
     }
 
     /**
@@ -272,6 +278,7 @@ class MobileService : Service() {
         xmlPending = false
         firstScreen = false
         saveCurrScreenXML()
+        saveCurrentScreenShot()
     }
 
     /**
@@ -323,6 +330,10 @@ class MobileService : Service() {
 </hierarchy>"""
     }
 
+
+
+
+
     /**
      * 将GenericElement转换为XML字符串
      * @param element 要转换的GenericElement
@@ -352,10 +363,181 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     }
 
     /**
+     * 保存当前屏幕截图
+     * 支持Android API 24及以上版本
+     * 注意：此方法仅进行内存截图，不需要存储权限
+     */
+    fun saveCurrentScreenShot() {
+        try {
+            // 获取当前Activity
+            val activity = ActivityTracker.getCurrentActivity()
+            if (activity == null) {
+                Log.e("MobileService", "无法获取当前Activity")
+                return
+            }
+
+            // 确保在主线程执行UI操作
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                performScreenshot(activity)
+            } else {
+                Handler(Looper.getMainLooper()).post {
+                    performScreenshot(activity)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MobileService", "saveCurrentScreenShot异常", e)
+        }
+    }
+
+    /**
+     * 执行截图操作的具体实现
+     * @param activity 当前Activity实例
+     */
+    private fun performScreenshot(activity: Activity) {
+        try {
+            val rootView = activity.window?.decorView?.rootView
+            if (rootView == null) {
+                Log.e("MobileService", "无法获取根视图")
+                return
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // Android 8.0+ 使用PixelCopy
+                val bitmap = Bitmap.createBitmap(
+                    rootView.width, 
+                    rootView.height, 
+                    Bitmap.Config.ARGB_8888
+                )
+                
+                PixelCopy.request(
+                    activity.window,
+                    Rect(0, 0, rootView.width, rootView.height),
+                    bitmap,
+                    { result ->
+                        when (result) {
+                            PixelCopy.SUCCESS -> {
+                                Log.d("MobileService", "截图成功，尺寸: ${bitmap.width}x${bitmap.height}")
+                                // 这里可以处理bitmap，比如保存到内存或显示
+                                handleScreenshotResult(bitmap)
+                            }
+                            PixelCopy.ERROR_SOURCE_NO_DATA -> {
+                                Log.e("MobileService", "截图失败: 源数据无效")
+                            }
+                            PixelCopy.ERROR_SOURCE_INVALID -> {
+                                Log.e("MobileService", "截图失败: 源无效")
+                            }
+                            PixelCopy.ERROR_DESTINATION_INVALID -> {
+                                Log.e("MobileService", "截图失败: 目标无效")
+                            }
+                            else -> {
+                                Log.e("MobileService", "截图失败: 未知错误 $result")
+                            }
+                        }
+                    },
+                    Handler(Looper.getMainLooper())
+                )
+            } else {
+                // Android 7.x 使用DrawingCache (已弃用但仍可用)
+                try {
+                    rootView.isDrawingCacheEnabled = true
+                    rootView.buildDrawingCache(true)
+                    val bitmap = rootView.drawingCache?.copy(Bitmap.Config.ARGB_8888, false)
+                    
+                    if (bitmap != null && !bitmap.isRecycled) {
+                        Log.d("MobileService", "截图成功 (DrawingCache)，尺寸: ${bitmap.width}x${bitmap.height}")
+                        handleScreenshotResult(bitmap)
+                    } else {
+                        Log.e("MobileService", "截图失败: bitmap为null或已回收")
+                    }
+                } finally {
+                    // 确保清理DrawingCache
+                    rootView.isDrawingCacheEnabled = false
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.e("MobileService", "截图失败: 安全异常", e)
+        } catch (e: IllegalArgumentException) {
+            Log.e("MobileService", "截图失败: 参数异常", e)
+        } catch (e: Exception) {
+            Log.e("MobileService", "截图过程中发生异常", e)
+        }
+    }
+
+    /**
+     * 安全地回收旧的截图，防止内存泄漏
+     */
+    private fun recycleOldScreenshot() {
+        try {
+            val oldScreenshot = currentScreenShot
+            if (oldScreenshot != null && !oldScreenshot.isRecycled) {
+                oldScreenshot.recycle()
+                Log.d("MobileService", "已回收旧截图")
+            }
+        } catch (e: Exception) {
+            Log.e("MobileService", "回收旧截图时发生异常", e)
+        }
+    }
+
+    /**
+     * 处理截图结果
+     * @param bitmap 截图位图
+     */
+    private fun handleScreenshotResult(bitmap: Bitmap?) {
+        try {
+            if (bitmap != null && !bitmap.isRecycled) {
+                // 先回收旧的截图，防止内存泄漏
+                recycleOldScreenshot()
+                
+                // 将新截图结果保存到currentScreenShot变量
+                currentScreenShot = bitmap
+                Log.d("MobileService", "截图处理完成，已保存到currentScreenShot")
+            } else {
+                Log.w("MobileService", "截图结果无效")
+                // 回收旧截图并设置为null
+                recycleOldScreenshot()
+                currentScreenShot = null
+            }
+        } catch (e: Exception) {
+            Log.e("MobileService", "处理截图结果时发生异常", e)
+            // 发生异常时也要回收旧截图
+            recycleOldScreenshot()
+            currentScreenShot = null
+        }
+    }
+
+    /**
      * 发送屏幕信息
+     * 增加空值检查，避免空指针异常
      */
     private fun sendScreen() {
-        mExecutorService.execute { mClient?.sendXML(currentScreenXML) }
+        try {
+            // 检查截图是否可用
+            val screenshot = currentScreenShot
+            if (screenshot != null && !screenshot.isRecycled) {
+                mExecutorService.execute { 
+                    try {
+                        Log.d("MobileService", "开始发送截图")
+                        mClient?.sendScreenshot(screenshot)
+                    } catch (e: Exception) {
+                        Log.e("MobileService", "发送截图失败", e)
+                    }
+                }
+            } else {
+                Log.w("MobileService", "截图不可用，跳过发送截图")
+            }
+            
+            // 发送XML数据
+            mExecutorService.execute { 
+                try {
+                    Log.d("MobileService", "开始发送XML")
+                   mClient?.sendXML(currentScreenXML)
+                } catch (e: Exception) {
+                    Log.e("MobileService", "发送XML失败", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MobileService", "sendScreen方法执行异常", e)
+        }
     }
 
     /**
@@ -405,10 +587,12 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         screenNeedUpdate = false
         firstScreen = false
         mMobileGPTGlobal = MobileGPTGlobal.reset()
-        
+
+                
         // 停止屏幕更新
         stopPeriodicScreenUpdate()
-        
+     
+
 //        mainThreadHandler.post {
 //            mSpeech = MobileGPTSpeechRecognizer(this@MobileService)
 //            mAskPopUp = AskPopUp(this@MobileService, mClient!!, mSpeech)
@@ -419,27 +603,48 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
 
     /**
      * 启动定时屏幕更新功能
-     * 每隔1秒调用saveCurrScreen并发送屏幕信息
+     * 增强Activity状态检查
      */
     private fun startPeriodicScreenUpdate() {
-        isScreenUpdateEnabled = true
-        screenUpdateRunnable = object : Runnable {
-            override fun run() {
-                if (isScreenUpdateEnabled) {
-                    // 在后台线程执行屏幕保存和发送
-                    mExecutorService.execute {
-                        saveCurrScreen()
-                        sendScreen()
-                        Log.d("MobileService", currentScreenXML)
+        try {
+            isScreenUpdateEnabled = true
+            screenUpdateRunnable = object : Runnable {
+                override fun run() {
+                    if (isScreenUpdateEnabled) {
+                        try {
+                            // 检查是否有可用的Activity
+                            val currentActivity = ActivityTracker.getCurrentActivity()
+                            if (currentActivity == null) {
+                                Log.d(TAG, "当前无Activity，跳过屏幕更新")
+                                // 继续下次循环
+                                mainThreadHandler.postDelayed(this, 3000)
+                                return
+                            }
+                            
+                            // 在后台线程执行屏幕保存和发送
+                            mExecutorService.execute {
+                                try {
+                                    saveCurrScreen()
+                                    sendScreen()
+                                    Log.d("MobileService", currentScreenXML)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "屏幕更新过程中发生异常", e)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "定时任务执行异常", e)
+                        }
+                        // 1秒后再次执行
+                        mainThreadHandler.postDelayed(this, 3000)
                     }
-                    // 1秒后再次执行
-                    mainThreadHandler.postDelayed(this, 3000)
                 }
             }
+            // 启动定时任务
+            mainThreadHandler.post(screenUpdateRunnable!!)
+            Log.d(TAG, "定时屏幕更新已启动")
+        } catch (e: Exception) {
+            Log.e(TAG, "启动定时屏幕更新失败", e)
         }
-        // 启动定时任务
-        mainThreadHandler.post(screenUpdateRunnable!!)
-        Log.d(TAG, "定时屏幕更新已启动")
     }
     
     /**
@@ -455,12 +660,32 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
 
     /**
      * 服务关闭
+     * 清理所有资源，防止内存泄漏
      */
     override fun onDestroy() {
-        stopPeriodicScreenUpdate()
-        unregisterReceiver(stringReceiver)
-        mClient?.disconnect()
-        super.onDestroy()
+        try {
+            // 停止屏幕更新
+            stopPeriodicScreenUpdate()
+            
+            // 清理截图资源
+            recycleOldScreenshot()
+            currentScreenShot = null
+            
+            // 清理其他资源
+            unregisterReceiver(stringReceiver)
+            mClient?.disconnect()
+            
+            // 关闭线程池
+            if (::mExecutorService.isInitialized) {
+                mExecutorService.shutdown()
+            }
+            
+            Log.d(TAG, "MobileService已销毁，所有资源已清理")
+        } catch (e: Exception) {
+            Log.e(TAG, "销毁服务时发生异常", e)
+        } finally {
+            super.onDestroy()
+        }
     }
 
     /**
