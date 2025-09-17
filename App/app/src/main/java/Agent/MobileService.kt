@@ -286,9 +286,8 @@ class MobileService : Service() {
                     handleAsk(infoName, question)
                 }
                 in MobileGPTGlobal.AVAILABLE_ACTIONS -> {
-                    // 注意：普通服务无法直接执行UI操作，需要通过其他方式实现
-                    Log.d(TAG, "UI action requested: $action")
-                    // 可以发送广播或使用其他机制来执行UI操作
+                    // 执行UI动作
+                    executeUIAction(action, args)
                 }
             }
         } catch (e: JSONException) {
@@ -315,6 +314,201 @@ class MobileService : Service() {
 //        mAskPopUp.setQuestion(info, question)
 //        mSpeech.speak(question, true)
 //        mAskPopUp.showPopUp()
+    }
+
+    /**
+     * 执行UI动作
+     * @param action 动作名称
+     * @param args 动作参数
+     */
+    private fun executeUIAction(action: String, args: org.json.JSONObject) {
+        try {
+            // 获取当前Activity
+            val currentActivity = ActivityTracker.getCurrentActivity()
+            if (currentActivity == null) {
+                Log.e(TAG, "当前Activity为空，无法执行UI动作")
+                sendActionError("当前Activity为空，无法执行UI动作")
+                return
+            }
+
+            // 获取目标元素的index
+            val index = if (args.has("index")) {
+                try {
+                    args.getInt("index")
+                } catch (e: Exception) {
+                    args.getString("index").toInt()
+                }
+            } else {
+                Log.e(TAG, "动作参数中缺少index")
+                sendActionError("动作参数中缺少index")
+                return
+            }
+
+            // 从nodeMap中获取目标元素
+            val targetElement = nodeMap?.get(index)
+            if (targetElement == null) {
+                Log.e(TAG, "未找到index为${index}的元素")
+                sendActionError("未找到index为${index}的元素")
+                return
+            }
+
+            Log.d(TAG, "执行动作: $action, 目标元素: ${targetElement.resourceId}, index: $index")
+
+            // 根据动作类型执行相应操作
+            when (action) {
+                "click" -> {
+                    executeClickAction(currentActivity, targetElement)
+                }
+                "input" -> {
+                    val inputText = args.optString("input_text", "")
+                    executeInputAction(currentActivity, targetElement, inputText)
+                }
+                "scroll" -> {
+                    val direction = args.optString("direction", "down")
+                    executeScrollAction(currentActivity, targetElement, direction)
+                }
+                "long-click" -> {
+                    executeLongClickAction(currentActivity, targetElement)
+                }
+                "go-back" -> {
+                    executeGoBackAction(currentActivity)
+                }
+                "go-home" -> {
+                    executeGoHomeAction(currentActivity)
+                }
+                else -> {
+                    Log.e(TAG, "不支持的动作类型: $action")
+                    sendActionError("不支持的动作类型: $action")
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "执行UI动作时发生异常", e)
+            sendActionError("执行UI动作时发生异常: ${e.message}")
+        }
+    }
+
+    /**
+     * 执行点击动作
+     */
+    private fun executeClickAction(activity: Activity, element: GenericElement) {
+        ElementController.clickElement(activity, element.resourceId) { success ->
+            if (success) {
+                Log.d(TAG, "点击动作执行成功")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "点击动作执行失败")
+                sendActionError("点击动作执行失败")
+            }
+        }
+    }
+
+    /**
+     * 执行输入动作
+     */
+    private fun executeInputAction(activity: Activity, element: GenericElement, inputText: String) {
+        ElementController.setInputValue(activity, element.resourceId, inputText) { success ->
+            if (success) {
+                Log.d(TAG, "输入动作执行成功: $inputText")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "输入动作执行失败")
+                sendActionError("输入动作执行失败")
+            }
+        }
+    }
+
+    /**
+     * 执行滚动动作
+     */
+    private fun executeScrollAction(activity: Activity, element: GenericElement, direction: String) {
+        // 使用NativeController的滚动功能
+        val startX = element.bounds.centerX().toFloat()
+        val startY = element.bounds.centerY().toFloat()
+        val endX = startX
+        val endY = when (direction.lowercase()) {
+            "up" -> startY - 200
+            "down" -> startY + 200
+            "left" -> startX - 200
+            "right" -> startX + 200
+            else -> startY + 200
+        }
+
+        controller.NativeController.scrollByTouch(activity, startX, startY, endX, endY) { success ->
+            if (success) {
+                Log.d(TAG, "滚动动作执行成功: $direction")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "滚动动作执行失败")
+                sendActionError("滚动动作执行失败")
+            }
+        }
+    }
+
+    /**
+     * 执行长按动作
+     */
+    private fun executeLongClickAction(activity: Activity, element: GenericElement) {
+        ElementController.longClickElement(activity, element.resourceId) { success ->
+            if (success) {
+                Log.d(TAG, "长按动作执行成功")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "长按动作执行失败")
+                sendActionError("长按动作执行失败")
+            }
+        }
+    }
+
+    /**
+     * 执行后退动作
+     */
+    private fun executeGoBackAction(activity: Activity) {
+        controller.NativeController.goBack(activity) { success ->
+            if (success) {
+                Log.d(TAG, "后退动作执行成功")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "后退动作执行失败")
+                sendActionError("后退动作执行失败")
+            }
+        }
+    }
+
+    /**
+     * 执行回到主页动作
+     */
+    private fun executeGoHomeAction(activity: Activity) {
+        controller.NativeController.goToAppHome(activity) { success ->
+            if (success) {
+                Log.d(TAG, "回到主页动作执行成功")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "回到主页动作执行失败")
+                sendActionError("回到主页动作执行失败")
+            }
+        }
+    }
+
+    /**
+     * 发送动作错误信息
+     */
+    private fun sendActionError(errorMessage: String) {
+        val message = MobileGPTMessage().apply {
+            messageType = MobileGPTMessage.TYPE_ERROR
+            errType = MobileGPTMessage.ERROR_TYPE_ACTION
+            errMessage = errorMessage
+            preXml = previousScreenXML
+            action = currentAction
+            instruction = currentInstruction
+        }
+        mExecutorService.execute { mClient?.sendMessage(message) }
     }
 
 
@@ -353,10 +547,28 @@ class MobileService : Service() {
         
         // 使用ElementController获取当前元素树
         ElementController.getCurrentElementTree(currentActivity) { genericElement ->
+            // 构建nodeMap，将GenericElement树转换为index->GenericElement的HashMap
+            buildNodeMap(genericElement)
             // 将GenericElement转换为XML字符串
             currentScreenXML = convertGenericElementToXmlString(genericElement)
             Log.d(TAG, "元素树XML生成完成，当前XML长度: ${currentScreenXML.length}")
         }
+    }
+
+    /**
+     * 构建nodeMap，将GenericElement树转换为index->GenericElement的HashMap
+     * @param element 根元素
+     */
+    private fun buildNodeMap(element: GenericElement) {
+        // 递归遍历所有元素，将index作为key，GenericElement作为value存入nodeMap
+        fun traverseElement(elem: GenericElement) {
+            nodeMap?.put(elem.index, elem)
+            elem.children.forEach { child ->
+                traverseElement(child)
+            }
+        }
+        traverseElement(element)
+        Log.d(TAG, "NodeMap构建完成，包含 ${nodeMap?.size} 个元素")
     }
 
     /**
