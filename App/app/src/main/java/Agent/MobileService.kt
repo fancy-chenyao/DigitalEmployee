@@ -1135,6 +1135,19 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     }
 
     /**
+     * 构建nodeMap，将GenericElement树转换为index->GenericElement的HashMap
+     */
+    private fun buildNodeMap(element: GenericElement) {
+        fun traverseElement(elem: GenericElement) {
+            nodeMap?.put(elem.index, elem)
+            elem.children.forEach { child ->
+                traverseElement(child)
+            }
+        }
+        traverseElement(element)
+    }
+
+    /**
      * 初始化网络连接
      */
     private fun initNetworkConnection() {
