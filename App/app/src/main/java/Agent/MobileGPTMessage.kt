@@ -37,6 +37,26 @@ data class MobileGPTMessage(
         const val ERROR_TYPE_ACTION = "ACTION"
         const val ERROR_TYPE_SYSTEM = "SYSTEM"
         const val ERROR_TYPE_UNKNOWN = "UNKNOWN"
+        
+        /**
+         * 从JSON字符串创建消息对象
+         */
+        fun fromJsonString(jsonString: String): MobileGPTMessage {
+            val json = JSONObject(jsonString)
+            return MobileGPTMessage(
+                messageType = json.optString("messageType", ""),
+                instruction = json.optString("instruction", ""),
+                curXml = json.optString("curXml", ""),
+                preXml = json.optString("preXml", ""),
+                qaMessage = json.optString("qaMessage", ""),
+                errType = json.optString("errType", ""),
+                errMessage = json.optString("errMessage", ""),
+                advice = json.optString("advice", ""),
+                action = json.optString("action", ""),
+                actionMessage = json.optString("actionMessage", ""),
+                remark = json.optString("remark", "")
+            )
+        }
     }
     
     /**
@@ -120,27 +140,6 @@ data class MobileGPTMessage(
         return json.toString()
     }
     
-    /**
-     * 从JSON字符串创建消息对象
-     */
-    companion object {
-        fun fromJsonString(jsonString: String): MobileGPTMessage {
-            val json = JSONObject(jsonString)
-            return MobileGPTMessage(
-                messageType = json.optString("messageType", ""),
-                instruction = json.optString("instruction", ""),
-                curXml = json.optString("curXml", ""),
-                preXml = json.optString("preXml", ""),
-                qaMessage = json.optString("qaMessage", ""),
-                errType = json.optString("errType", ""),
-                errMessage = json.optString("errMessage", ""),
-                advice = json.optString("advice", ""),
-                action = json.optString("action", ""),
-                actionMessage = json.optString("actionMessage", ""),
-                remark = json.optString("remark", "")
-            )
-        }
-    }
     
     /**
      * 获取截图字节数组

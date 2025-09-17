@@ -170,7 +170,7 @@ class Server:
                         log("Client disconnected during action sending", "yellow")
                         break
 
-# 接收“问答”结果，如果 GPT 需要补充信息（登录验证码、二次确认），手机端弹窗提问 → 用户回答后回传 → 继续任务
+# 接收"问答"结果，如果 GPT 需要补充信息（登录验证码、二次确认），手机端弹窗提问 → 用户回答后回传 → 继续任务
             elif message_type == 'A':
                 qa_string = b''
                 while not qa_string.endswith(b'\n'):
@@ -182,8 +182,48 @@ class Server:
 
                 if action is not None:
                     message = json.dumps(action)
-                    client_socket.send(message.encode())
-                    client_socket.send("\r\n".encode())
+                    try:
+                        client_socket.send(message.encode())
+                        client_socket.send("\r\n".encode())
+                    except ConnectionAbortedError:
+                        log("Client disconnected during QA response sending", "yellow")
+                        break
+
+# 接收错误消息，包含完整的上下文信息（preXml、action、instruction等）
+            elif message_type == 'E':
+                file_info = b''
+                while not file_info.endswith(b'\n'):
+                    file_info += client_socket.recv(1)
+                file_size_str = file_info.decode().strip()
+                file_size = int(file_size_str)
+                
+                # 读取错误数据
+                error_data = b''
+                bytes_remaining = file_size
+                while bytes_remaining > 0:
+                    data = client_socket.recv(min(bytes_remaining, self.buffer_size))
+                    error_data += data
+                    bytes_remaining -= len(data)
+                
+                error_string = error_data.decode().strip()
+                log(f"Error message received: {error_string}", "red")
+                
+                # 解析错误信息
+                error_info = self._parse_error_message(error_string)
+                log(f"Parsed error - Type: {error_info.get('error_type', 'UNKNOWN')}, "
+                    f"Message: {error_info.get('error_message', 'No message')}, "
+                    f"Action: {error_info.get('action', 'None')}, "
+                    f"Instruction: {error_info.get('instruction', 'None')}", "red")
+                
+                # 如果有preXml，保存到MongoDB用于调试
+                if error_info.get('pre_xml'):
+                    self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
+
+# 接收获取操作列表请求
+            elif message_type == 'G':
+                log("Get actions request received", "blue")
+                # 这里可以返回可用的操作列表，目前暂时忽略
+                pass
 
     def __recv_xml(self, client_socket, screen_count, log_directory):
         # Receive the file name and size
@@ -265,3 +305,32 @@ class Server:
             )
         except Exception as e:
             log(f"Failed to save XML to MongoDB: {e}", "red")
+    
+    def _parse_error_message(self, error_string):
+        """解析错误消息，提取各种上下文信息"""
+        error_info = {}
+        lines = error_string.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('ERROR_TYPE:'):
+                error_info['error_type'] = line[11:]
+            elif line.startswith('ERROR_MESSAGE:'):
+                error_info['error_message'] = line[14:]
+            elif line.startswith('ACTION:'):
+                error_info['action'] = line[7:]
+            elif line.startswith('INSTRUCTION:'):
+                error_info['instruction'] = line[12:]
+            elif line.startswith('REMARK:'):
+                error_info['remark'] = line[7:]
+            elif line == 'PRE_XML:':
+                # 找到PRE_XML标记，收集后续所有行作为XML内容
+                xml_lines = []
+                for xml_line in lines[lines.index(line) + 1:]:
+                    if xml_line.startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                        break
+                    xml_lines.append(xml_line)
+                if xml_lines:
+                    error_info['pre_xml'] = '\n'.join(xml_lines)
+        
+        return error_info

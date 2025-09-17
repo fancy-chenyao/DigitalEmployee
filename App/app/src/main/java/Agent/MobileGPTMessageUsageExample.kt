@@ -187,17 +187,20 @@ class MobileGPTMessageUsageExample {
                 // 尝试执行某个操作
                 val result = performSomeOperation()
                 
-                if (result.isSuccess) {
-                    // 操作成功，发送成功消息
-                    val message = MobileGPTMessage().createInstructionMessage("操作成功完成")
-                    client.sendMessage(message)
-                } else {
-                    // 操作失败，发送错误消息
-                    val message = MobileGPTMessage().createErrorMessage(
-                        MobileGPTMessage.ERROR_TYPE_ACTION,
-                        "操作失败: ${result.errorMessage}"
-                    )
-                    client.sendMessage(message)
+                when (result) {
+                    is OperationResult.Success -> {
+                        // 操作成功，发送成功消息
+                        val message = MobileGPTMessage().createInstructionMessage("操作成功完成")
+                        client.sendMessage(message)
+                    }
+                    is OperationResult.Error -> {
+                        // 操作失败，发送错误消息
+                        val message = MobileGPTMessage().createErrorMessage(
+                            MobileGPTMessage.ERROR_TYPE_ACTION,
+                            "操作失败: ${result.errorMessage}"
+                        )
+                        client.sendMessage(message)
+                    }
                 }
             } catch (e: Exception) {
                 // 捕获异常，发送系统错误消息
@@ -225,12 +228,8 @@ class MobileGPTMessageUsageExample {
          * 操作结果数据类
          */
         sealed class OperationResult {
-            data class Success(val message: String) : OperationResult() {
-                val isSuccess: Boolean = true
-            }
-            data class Error(val errorMessage: String) : OperationResult() {
-                val isSuccess: Boolean = false
-            }
+            data class Success(val message: String) : OperationResult()
+            data class Error(val errorMessage: String) : OperationResult()
         }
     }
 }

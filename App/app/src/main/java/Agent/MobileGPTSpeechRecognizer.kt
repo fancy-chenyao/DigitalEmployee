@@ -8,12 +8,10 @@ import java.util.Locale
 /**
  * MobileGPT语音识别器类
  */
-class MobileGPTSpeechRecognizer(private val mContext: Context) : TextToSpeech.OnInitListener {
+class MobileGPTSpeechRecognizer(mContext: Context) : TextToSpeech.OnInitListener {
     
-    companion object {
-        private const val TAG = "MobileGPT_SPEECH"
-    }
-    
+    companion object;
+
     private var mTts: TextToSpeech
     private var ttsListener: UtteranceProgressListener
     

@@ -55,7 +55,7 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
     fun sendMessage(message: MobileGPTMessage) {
         Log.d("MobileGPTclient", "发送消息: ${message.getDescription()}")
         try {
-            socket?.let {
+            if (socket != null) {
                 when (message.messageType) {
                     MobileGPTMessage.TYPE_INSTRUCTION -> {
                         dos?.writeByte('I'.code)
@@ -104,7 +104,9 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
                         Log.e(TAG, "未知消息类型: ${message.messageType}")
                     }
                 }
-            } ?: Log.d(TAG, "socket not connected yet")
+            } else {
+                Log.d(TAG, "socket not connected yet")
+            }
         } catch (e: IOException) {
             Log.e(TAG, "server offline")
         }

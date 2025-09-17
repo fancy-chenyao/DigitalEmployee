@@ -1,16 +1,15 @@
 package Agent
 
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Binder
@@ -19,22 +18,15 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
-import android.view.Display
-import android.view.WindowManager
-//import Agent.AskPopUp
-import Agent.GPTMessage
-import android.accessibilityservice.AccessibilityService.ScreenshotResult
-import android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
-import android.app.Activity
 import android.view.PixelCopy
+import android.view.WindowManager
+import controller.ElementController
+import controller.GenericElement
 import org.json.JSONException
 import java.io.File
 import java.io.IOException
-import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import controller.GenericElement
-import controller.ElementController
 
 /**
  * MobileGPT普通服务类，负责处理与服务器通信
@@ -58,9 +50,6 @@ class MobileService : Service() {
     var xmlPending = false
     var screenNeedUpdate = false
     var firstScreen = false
-    private var screenUpdateWaitRunnable: Runnable? = null
-    private var screenUpdateTimeoutRunnable: Runnable? = null
-    private var clickRetryRunnable: Runnable? = null
     private var actionFailedRunnable: Runnable? = null
     private lateinit var mExecutorService: ExecutorService
     private val mainThreadHandler = Handler(Looper.getMainLooper())
@@ -76,9 +65,7 @@ class MobileService : Service() {
     /**
      * 本地绑定器类
      */
-    inner class LocalBinder : Binder() {
-        fun getService(): MobileService = this@MobileService
-    }
+    inner class LocalBinder : Binder()
 
     /**
      * 广播接收器，用于接收指令
@@ -87,19 +74,24 @@ class MobileService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == MobileGPTGlobal.STRING_ACTION) {
                 reset()
-                instruction = intent.getStringExtra(MobileGPTGlobal.INSTRUCTION_EXTRA)
-                Log.d(TAG, "receive broadcast")
-                mExecutorService.execute { 
-                    initNetworkConnection()
-                    // 记录当前发送的指令
-                    currentInstruction = instruction!!
-                    Log.d(TAG, "记录当前发送的指令: $currentInstruction")
-                    val message = MobileGPTMessage().createInstructionMessage(instruction)
-                    mClient?.sendMessage(message)
-                    // 发送指令后启动屏幕更新
-                    mainThreadHandler.post {
-                        startPeriodicScreenUpdate()
+                val receivedInstruction = intent.getStringExtra(MobileGPTGlobal.INSTRUCTION_EXTRA)
+                if (receivedInstruction != null) {
+                    instruction = receivedInstruction
+                    Log.d(TAG, "receive broadcast")
+                    mExecutorService.execute { 
+                        initNetworkConnection()
+                        // 记录当前发送的指令
+                        currentInstruction = receivedInstruction
+                        Log.d(TAG, "记录当前发送的指令: $currentInstruction")
+                        val message = MobileGPTMessage().createInstructionMessage(receivedInstruction)
+                        mClient?.sendMessage(message)
+                        // 发送指令后启动屏幕更新
+                        mainThreadHandler.post {
+                            startPeriodicScreenUpdate()
+                        }
                     }
+                } else {
+                    Log.e(TAG, "Received null instruction from intent")
                 }
             }
         }
