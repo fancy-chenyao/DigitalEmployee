@@ -491,7 +491,9 @@ class MobileService : Service() {
                     executeUIAction(action, args)
 
 
-
+                    // 执行完动作后，修改进行屏幕发送的变量。设置运行失败的Runnable
+                    screenNeedUpdate = true;
+                    xmlPending = true;
                     setActionFailedRunnable("There is no change in the screen. Try other approach.", 10000);
 
                 }

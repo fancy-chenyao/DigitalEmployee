@@ -2,6 +2,8 @@ import json
 import os
 import socket
 import threading
+import queue
+import time
 
 from utils.utils import log
 from screenParser.Encoder import xmlEncoder
@@ -16,10 +18,15 @@ class Server:
         self.port = port
         self.buffer_size = buffer_size
         self.memory_directory = './memory'# 核心数据存储目录（日志、截图、XML等）
+        self.enable_db = True  # 可配置：是否启用Mongo写入
+        self.db_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
+        self._db_worker_thread = threading.Thread(target=self._db_worker, name="db-writer", daemon=True)
 
         # Create the directory for saving received files if it doesn't exist
         if not os.path.exists(self.memory_directory):
             os.makedirs(self.memory_directory)
+        # 启动DB后台写入线程
+        self._db_worker_thread.start()
 
     def open(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -52,9 +59,14 @@ class Server:
         screen_parser = xmlEncoder()# XML解析器（解析手机界面XML，提取控件信息）
         screen_count = 0  # 屏幕计数（用于截图/XML文件命名，按顺序递增）
         log_directory = self.memory_directory  # 日志根目录
+        screenshots_dir = None
+        xmls_dir = None
+
+        # 使用缓冲文件对象提高读取效率
+        file_obj = client_socket.makefile('rb')
 
         while True:
-            raw_message_type = client_socket.recv(1)
+            raw_message_type = file_obj.read(1)
 
             if not raw_message_type:
                 log(f"Connection closed by {client_address}", 'red')
@@ -70,11 +82,8 @@ class Server:
             # 接收用户的自然语言指令，先让 TaskAgent 解析任务 → 再让 AppAgent 预测目标 App → 把包名发回手机
             elif message_type == 'I':  # Instruction
                 log("Instruction is received", "blue")
-                # Receive the string
-                instruction = b''
-                while not instruction.endswith(b'\n'):
-                    instruction += client_socket.recv(1)
-                instruction = instruction.decode().strip()
+                # Receive the string (使用缓冲按行读取)
+                instruction = file_obj.readline().decode().strip()
 
                 # 1. TaskAgent解析指令为结构化任务（API格式）
                 task, is_new_task = task_agent.get_task(instruction)
@@ -85,7 +94,12 @@ class Server:
                 now = datetime.now()
                 # dd/mm/YY H:M:S
                 dt_string = now.strftime("%Y_%m_%d_%H-%M-%S")  # 合法格式：2025_08_06_16-41-57
-                log_directory += f'/log/session/{task["name"]}/{dt_string}/'
+                log_directory = os.path.join(self.memory_directory, f'log/session/{task["name"]}/{dt_string}/')
+                # 一次性创建会话期目录
+                screenshots_dir = os.path.join(log_directory, "screenshots")
+                xmls_dir = os.path.join(log_directory, "xmls")
+                os.makedirs(screenshots_dir, exist_ok=True)
+                os.makedirs(xmls_dir, exist_ok=True)
                 screen_parser.init(log_directory)
                 
                 # 存储当前任务信息用于后续MongoDB存储（无应用字段）
@@ -101,28 +115,33 @@ class Server:
 
 # 接收屏幕截图（jpg）按字节流完整读取后保存到本地临时目录和MongoDB
             elif message_type == 'S':
-                file_info = b''
-                while not file_info.endswith(b'\n'):
-                    file_info += client_socket.recv(1)
-                file_size_str = file_info.decode().strip()
-                file_size = int(file_size_str)
+                # 读取文件大小
+                size_line = file_obj.readline().decode().strip()
+                file_size = int(size_line)
 
-                # save screenshot image to local temp directory
-                screenshots_dir = os.path.join(log_directory, "screenshots")
-                if not os.path.exists(screenshots_dir):
-                    os.makedirs(screenshots_dir)
+                # save screenshot image to local temp directory（流式写入，避免内存峰值）
+                if screenshots_dir is None:
+                    screenshots_dir = os.path.join(log_directory, "screenshots")
+                    os.makedirs(screenshots_dir, exist_ok=True)
                 scr_shot_path = os.path.join(screenshots_dir, f"{screen_count}.jpg")
+                bytes_remaining = file_size
                 with open(scr_shot_path, 'wb') as f:
-                    bytes_remaining = file_size
-                    image_data = b""
                     while bytes_remaining > 0:
-                        data = client_socket.recv(min(bytes_remaining, self.buffer_size))
-                        image_data += data
-                        bytes_remaining -= len(data)
-                    f.write(image_data)
-                
-                # 同时保存到MongoDB（用于后续处理）
-                self._save_screenshot_to_mongo(image_data, screen_count)
+                        chunk = file_obj.read(min(bytes_remaining, self.buffer_size))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        bytes_remaining -= len(chunk)
+
+                # 将截图路径入队（不再base64存图）
+                if self.enable_db:
+                    self._enqueue_db_doc({
+                        'kind': 'screenshot',
+                        'task_name': getattr(self, 'current_task', 'unknown'),
+                        'screen_count': screen_count,
+                        'screenshot_path': scr_shot_path,
+                        'created_at': datetime.now()
+                    })
 
 # 接收当前界面的 XML 布局，保存为 .xml → 用 xmlEncoder 解析出可点击控件 → 交给 MobileGPT 决策下一步动作（如点击、滑动、输入）→ 把动作 JSON 发回手机
             elif message_type == 'X':
@@ -131,8 +150,11 @@ class Server:
                     now = datetime.now()
                     dt_string = now.strftime("%Y_%m_%d_%H-%M-%S")
                     # 准备日志目录并初始化解析器
-                    fallback_log_dir = os.path.join(self.memory_directory, f'log/session/{dt_string}/')
-                    log_directory = fallback_log_dir
+                    log_directory = os.path.join(self.memory_directory, f'log/session/{dt_string}/')
+                    screenshots_dir = os.path.join(log_directory, "screenshots")
+                    xmls_dir = os.path.join(log_directory, "xmls")
+                    os.makedirs(screenshots_dir, exist_ok=True)
+                    os.makedirs(xmls_dir, exist_ok=True)
                     screen_parser.init(log_directory)
 
                     # 初始化一个默认任务与内存，避免 NoneType 错误
@@ -141,19 +163,28 @@ class Server:
                     self.current_task = default_task["name"]
                     self.current_log_directory = log_directory
 
-                # 1. 调用工具函数__recv_xml接收并保存XML文件
-                raw_xml = self.__recv_xml(client_socket, screen_count, log_directory)
+                # 1. 调用工具函数__recv_xml接收并保存XML文件（流式落盘）
+                raw_xml = self.__recv_xml(file_obj, screen_count, log_directory, xmls_dir)
                 
-                # 同时保存原始XML到MongoDB
-                self._save_xml_to_mongo(raw_xml, screen_count, 'raw')
+                # 原始XML可选入队
+                # 统一合并到单条文档中，见后续入队
 
                 # 2. 解析XML：得到结构化控件信息（parsed_xml）、层级结构（hierarchy_xml）、编码XML（encoded_xml）
                 parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(raw_xml, screen_count)
                 
-                # 保存解析后的XML到MongoDB
-                self._save_xml_to_mongo(parsed_xml, screen_count, 'parsed')
-                self._save_xml_to_mongo(hierarchy_xml, screen_count, 'hierarchy')
-                self._save_xml_to_mongo(encoded_xml, screen_count, 'encoded')
+                # 合并单屏文档入队，后台批量写库
+                if self.enable_db:
+                    self._enqueue_db_doc({
+                        'kind': 'screen_bundle',
+                        'task_name': getattr(self, 'current_task', 'unknown'),
+                        'screen_count': screen_count,
+                        'screenshot_path': os.path.join(screenshots_dir or '', f"{screen_count}.jpg"),
+                        'raw_xml': raw_xml,
+                        'parsed_xml': parsed_xml,
+                        'hierarchy_xml': hierarchy_xml,
+                        'encoded_xml': encoded_xml,
+                        'created_at': datetime.now()
+                    })
                 
                 screen_count += 1  # 屏幕计数递增（下一张截图/XML用新编号）
 
@@ -172,10 +203,7 @@ class Server:
 
 # 接收"问答"结果，如果 GPT 需要补充信息（登录验证码、二次确认），手机端弹窗提问 → 用户回答后回传 → 继续任务
             elif message_type == 'A':
-                qa_string = b''
-                while not qa_string.endswith(b'\n'):
-                    qa_string += client_socket.recv(1)
-                qa_string = qa_string.decode().strip()
+                qa_string = file_obj.readline().decode().strip()
                 info_name, question, answer = qa_string.split("\\", 2)
                 log(f"QA is received ({question}: {answer})", "blue")
                 action = mobileGPT.set_qa_answer(info_name, question, answer)
@@ -191,21 +219,19 @@ class Server:
 
 # 接收错误消息，包含完整的上下文信息（preXml、action、instruction等）
             elif message_type == 'E':
-                file_info = b''
-                while not file_info.endswith(b'\n'):
-                    file_info += client_socket.recv(1)
-                file_size_str = file_info.decode().strip()
-                file_size = int(file_size_str)
+                size_line = file_obj.readline().decode().strip()
+                file_size = int(size_line)
                 
                 # 读取错误数据
-                error_data = b''
                 bytes_remaining = file_size
+                chunks = []
                 while bytes_remaining > 0:
-                    data = client_socket.recv(min(bytes_remaining, self.buffer_size))
-                    error_data += data
+                    data = file_obj.read(min(bytes_remaining, self.buffer_size))
+                    if not data:
+                        break
+                    chunks.append(data)
                     bytes_remaining -= len(data)
-                
-                error_string = error_data.decode().strip()
+                error_string = b''.join(chunks).decode().strip()
                 log(f"Error message received: {error_string}", "red")
                 
                 # 解析错误信息
@@ -225,58 +251,39 @@ class Server:
                 # 这里可以返回可用的操作列表，目前暂时忽略
                 pass
 
-    def __recv_xml(self, client_socket, screen_count, log_directory):
-        # Receive the file name and size
-        file_info = b''
-        while not file_info.endswith(b'\n'):
-            file_info += client_socket.recv(1)
-        file_size_str = file_info.decode().strip()
-        file_size = int(file_size_str)
+    def __recv_xml(self, file_obj, screen_count, log_directory, xmls_dir):
+        # Receive the file size (length-prefixed line)
+        size_line = file_obj.readline().decode().strip()
+        file_size = int(size_line)
 
-        # 2. 拼接XML保存路径（日志目录/xmls/屏幕计数.xml）
-        xmls_dir = os.path.join(log_directory, "xmls")
-        if not os.path.exists(xmls_dir):
-            os.makedirs(xmls_dir)
+        # 拼接XML保存路径（日志目录/xmls/屏幕计数.xml），目录由会话初始化时创建
+        if xmls_dir is None:
+            xmls_dir = os.path.join(log_directory, "xmls")
+            os.makedirs(xmls_dir, exist_ok=True)
         raw_xml_path = os.path.join(xmls_dir, f"{screen_count}.xml")
 
-        # 3. 完整读取XML字节流，修复空class属性（避免后续解析出错）
-        with open(raw_xml_path, 'w', encoding='utf-8') as f:
-            bytes_remaining = file_size
-            string_data = b''
+        # 流式读取并直接写入文件，避免在内存里拼接超大字符串
+        bytes_remaining = file_size
+        with open(raw_xml_path, 'wb') as f:
             while bytes_remaining > 0:
-                data = client_socket.recv(min(bytes_remaining, self.buffer_size))
-                string_data += data
-                bytes_remaining -= len(data)
-            raw_xml = string_data.decode().strip().replace("class=\"\"", "class=\"unknown\"")
-            f.write(raw_xml)
+                chunk = file_obj.read(min(bytes_remaining, self.buffer_size))
+                if not chunk:
+                    break
+                f.write(chunk)
+                bytes_remaining -= len(chunk)
+
+        # 读取回字符串供解析器使用（一次I/O，避免双倍内存占用）
+        with open(raw_xml_path, 'r', encoding='utf-8') as rf:
+            raw_xml = rf.read().strip().replace("class=\"\"", "class=\"unknown\"")
+        # 将修复后的字符串覆盖回文件，保证磁盘上也是修复版
+        with open(raw_xml_path, 'w', encoding='utf-8') as wf:
+            wf.write(raw_xml)
         return raw_xml
     
     def _save_screenshot_to_mongo(self, image_data, screen_count):
-        """将屏幕截图保存到MongoDB（无 app 维度）"""
-        import base64
-        from utils.mongo_utils import get_db
-        
-        try:
-            db = get_db()
-            collection = db['temp_screenshots']
-            
-            screenshot_data = {
-                'task_name': getattr(self, 'current_task', 'unknown'),
-                'screen_count': screen_count,
-                'screenshot': base64.b64encode(image_data).decode('utf-8'),
-                'created_at': datetime.now()
-            }
-            
-            collection.replace_one(
-                {
-                    'task_name': screenshot_data['task_name'],
-                    'screen_count': screen_count
-                },
-                screenshot_data,
-                upsert=True
-            )
-        except Exception as e:
-            log(f"Failed to save screenshot to MongoDB: {e}", "red")
+        """已弃用：改为异步队列写入，仅保存路径不做base64。保留以兼容旧调用。"""
+        if self.enable_db:
+            log("_save_screenshot_to_mongo is deprecated; using queued path-based doc", "yellow")
     
     def _save_xml_to_mongo(self, xml_data, screen_count, xml_type):
         """将XML数据保存到MongoDB（无 app 维度）"""
@@ -334,3 +341,82 @@ class Server:
                     error_info['pre_xml'] = '\n'.join(xml_lines)
         
         return error_info
+
+    def _enqueue_db_doc(self, doc: dict):
+        try:
+            self.db_queue.put(doc, timeout=0.5)
+        except queue.Full:
+            log("DB queue full, dropping doc", "yellow")
+
+    def _db_worker(self):
+        """后台DB写入线程：批量、合并策略"""
+        from utils.mongo_utils import get_db
+        db = None
+        collection_xml = None
+        collection_shot = None
+        while True:
+            try:
+                # 批量拉取
+                batch = []
+                item = self.db_queue.get()
+                if item is not None:
+                    batch.append(item)
+                t0 = time.time()
+                while len(batch) < 50 and (time.time() - t0) < 0.5:
+                    try:
+                        batch.append(self.db_queue.get(timeout=0.05))
+                    except queue.Empty:
+                        break
+
+                if not batch:
+                    continue
+
+                # 延迟初始化连接
+                if db is None:
+                    try:
+                        db = get_db()
+                        collection_xml = db['temp_xmls_bundle']
+                        collection_shot = db['temp_screenshots_meta']
+                    except Exception as e:
+                        log(f"DB init failed in worker: {e}", "red")
+                        db = None
+                        continue
+
+                # 写入
+                for doc in batch:
+                    kind = doc.get('kind')
+                    if kind == 'screen_bundle' and collection_xml is not None:
+                        # 合并为一个文档（同一screen_count幂等）
+                        key = {
+                            'task_name': doc.get('task_name', 'unknown'),
+                            'screen_count': doc.get('screen_count', -1)
+                        }
+                        to_save = {
+                            **key,
+                            'screenshot_path': doc.get('screenshot_path'),
+                            'raw_xml': doc.get('raw_xml'),
+                            'parsed_xml': doc.get('parsed_xml'),
+                            'hierarchy_xml': doc.get('hierarchy_xml'),
+                            'encoded_xml': doc.get('encoded_xml'),
+                            'created_at': doc.get('created_at', datetime.now())
+                        }
+                        try:
+                            collection_xml.replace_one(key, to_save, upsert=True)
+                        except Exception as e:
+                            log(f"DB write (bundle) failed: {e}", "red")
+                    elif kind == 'screenshot' and collection_shot is not None:
+                        key = {
+                            'task_name': doc.get('task_name', 'unknown'),
+                            'screen_count': doc.get('screen_count', -1)
+                        }
+                        to_save = {
+                            **key,
+                            'screenshot_path': doc.get('screenshot_path'),
+                            'created_at': doc.get('created_at', datetime.now())
+                        }
+                        try:
+                            collection_shot.replace_one(key, to_save, upsert=True)
+                        except Exception as e:
+                            log(f"DB write (shot) failed: {e}", "red")
+            except Exception as e:
+                log(f"DB worker loop error: {e}", "red")
