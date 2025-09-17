@@ -2,12 +2,21 @@ import json
 import os
 import socket
 import threading
+import sys
+
+# 添加项目根目录到系统路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 from utils.utils import log
 from screenParser.Encoder import xmlEncoder
 from mobilegpt import MobileGPT
 from agents.task_agent import TaskAgent
 from datetime import datetime
+
+from Reflector_Agent.base import AgentMemory
+from Reflector_Agent.reflector import Reflector
 
 
 class Server:
@@ -218,6 +227,46 @@ class Server:
                 # 如果有preXml，保存到MongoDB用于调试
                 if error_info.get('pre_xml'):
                     self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
+
+                # 初始化AgentMemory
+                self.agent_memory = AgentMemory(
+                    instruction=error_info.get('instruction', 'None'),
+                    errTYPE=error_info.get('error_type', 'UNKNOWN'),
+                    errMessage=error_info.get('error_message', 'No message'),
+                    curXML=error_info.get('cur_xml', 'None'),
+                    preXML=error_info.get('pre_xml', 'None'),
+                    action=error_info.get('action', 'None')
+                )
+
+                # 调用Reflector进行反思分析
+                reflector = Reflector(self.agent_memory)
+                reflection = reflector.reflect_on_episodic_memory(self.agent_memory)
+                
+                # 根据反思结果决定下一步操作
+                if reflection.need_back:
+                    # 需要回退，直接发送回退指令
+                    back_action = {"name": "back", "parameters": {}}
+                    message = json.dumps(back_action)
+                    try:
+                        client_socket.send(message.encode())
+                        client_socket.send("\r\n".encode())
+                        log("Back action sent to client", "blue")
+                    except ConnectionAbortedError:
+                        log("Client disconnected during back action sending", "yellow")
+                        break
+                else:
+                    # 不需要回退，向规划模块发送建议
+                    advice = reflection.advice
+                    action = mobileGPT.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, advice)
+                    
+                    if action is not None:
+                        message = json.dumps(action)
+                        try:
+                            client_socket.send(message.encode())
+                            client_socket.send("\r\n".encode())
+                        except ConnectionAbortedError:
+                            log("Client disconnected during action sending", "yellow")
+                            break
 
 # 接收获取操作列表请求
             elif message_type == 'G':

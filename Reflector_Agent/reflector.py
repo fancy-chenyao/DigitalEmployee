@@ -12,8 +12,8 @@ import os
 # 添加Server目录到路径，以便导入utils
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server'))
 
-from base import AgentMemory
-from reflector_prompt import DEFAULT_REFLECTOR_SYSTEM_PROMPT, DEFAULT_PERSONA_FORMAT_TEMPLATE
+from Reflector_Agent.base import AgentMemory, Reflection
+from Reflector_Agent.reflector_prompt import DEFAULT_REFLECTOR_SYSTEM_PROMPT, DEFAULT_PERSONA_FORMAT_TEMPLATE
 from utils.utils import query
 
 # 设置日志
@@ -24,12 +24,11 @@ class Reflector:
         self.memory = memory
 
     
-    def reflect_on_episodic_memory(self, agent_memory: AgentMemory, goal: str) -> 'Reflection':
+    def reflect_on_episodic_memory(self, agent_memory: AgentMemory) -> 'Reflection':
         """
         基于情景记忆进行反思分析
         Args:
             agent_memory (AgentMemory): 包含智能体执行步骤的情景记忆
-            goal (str): 智能体要完成的目标描述
             
         Returns:
             Reflection: 包含分析结果的反思对象
@@ -63,7 +62,6 @@ class Reflector:
         # 构建用户消息内容，包含人格信息、目标和执行步骤
         content_sections = [
             persona_content,
-            f"Goal: {goal}",
             f"Error Type: {error_type}",
             f"Error Message: {error_message}",
             f"Action: {action}",
