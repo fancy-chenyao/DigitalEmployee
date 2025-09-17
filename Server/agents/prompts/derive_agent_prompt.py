@@ -98,13 +98,19 @@ def get_sys_prompt():
     return sys_msg
 
 
-def get_usr_prompt(instruction, subtask, history, screen, examples):
+def get_usr_prompt(instruction, subtask, history, screen, examples, suggestions):
     if len(history) == 0:
         numbered_history = "0. No event yet.\n"
     else:
         numbered_history = generate_numbered_list(history)
 
     usr_msg = ""
+    if len(suggestions) > 0:
+        usr_msg += (
+            "***Useful Suggestions***:\n"
+            "Consider the following suggestions when selecting your next action:\n"
+            f"{suggestions}\n\n"
+        )
     if len(examples) > 0:
         for i, example in enumerate(examples):
             example_instruction = example['instruction']
@@ -152,9 +158,9 @@ def get_usr_prompt(instruction, subtask, history, screen, examples):
     return usr_msg
 
 
-def get_prompts(instruction: str, subtask: dict, history: list, screen: str, examples: list):
+def get_prompts(instruction: str, subtask: dict, history: list, screen: str, examples: list, suggestions: list):
     sys_msg = get_sys_prompt()
-    usr_msg = get_usr_prompt(instruction, subtask, history, screen, examples)
+    usr_msg = get_usr_prompt(instruction, subtask, history, screen, examples, suggestions)
     messages = [{"role": "system", "content": sys_msg},
                 {"role": "user", "content": usr_msg}]
     return messages
