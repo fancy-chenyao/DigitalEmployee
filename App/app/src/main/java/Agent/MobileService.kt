@@ -488,6 +488,13 @@ class MobileService : Service() {
                     // 注意：普通服务无法直接执行UI操作，需要通过其他方式实现
                     Log.d(TAG, "UI action requested: $action")
                     // 可以发送广播或使用其他机制来执行UI操作
+
+
+                    // 执行完动作后，修改进行屏幕发送的变量。设置运行失败的Runnable
+                    screenNeedUpdate = true;
+                    xmlPending = true;
+                    setActionFailedRunnable("There is no change in the screen. Try other approach.", 10000);
+
                 }
             }
         } catch (e: JSONException) {
@@ -572,6 +579,7 @@ class MobileService : Service() {
             currentScreenXML = convertGenericElementToXmlString(genericElement)
             Log.d(TAG, "元素树XML生成完成，当前XML长度: ${currentScreenXML.length}")
             // XML生成完成后调用回调
+            onComplete?.invoke()
         }
     }
 
