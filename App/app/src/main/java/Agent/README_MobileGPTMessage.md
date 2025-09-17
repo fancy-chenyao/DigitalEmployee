@@ -73,6 +73,14 @@ REMARK:备注信息
 - 每次更新屏幕时自动记录preXml
 - 服务重置时自动清理所有状态
 
+### 4. 页面变化监听功能
+
+- **Activity生命周期监听**：通过ActivityTracker监听Activity变化
+- **ViewTreeObserver监听**：监听页面布局变化
+- **防抖处理**：500ms防抖延迟，避免频繁触发
+- **自动屏幕更新**：页面变化时自动发送XML和截图
+- **手动触发**：提供手动触发页面变化检测的功能
+
 ## 基本使用方法
 
 ### 1. 创建消息
@@ -162,6 +170,20 @@ val errorMessage = MobileGPTMessage().apply {
     instruction = currentInstruction // 自动包含当前指令
 }
 client.sendMessage(errorMessage)
+```
+
+### 页面变化监听示例
+
+```kotlin
+// 页面变化监听是自动的，无需手动配置
+// 系统会自动监听Activity变化和页面布局变化
+
+// 手动触发页面变化检测
+mobileService.triggerPageChangeDetection()
+
+// 检查页面变化监听是否活跃
+val isActive = mobileService.isPageChangeListenerActive()
+Log.d(TAG, "页面变化监听状态: $isActive")
 ```
 
 ### JSON序列化
@@ -263,3 +285,6 @@ MobileGPTMessageTest.testMessageValidation()
 5. JSON序列化不包含Bitmap数据，截图需要单独处理
 6. 状态记录是自动的，无需手动管理，但会在服务重置时自动清理
 7. 错误消息现在包含完整的上下文信息，便于服务器端调试和分析
+8. 页面变化监听使用防抖机制，避免频繁触发，提高性能
+9. ViewTreeObserver监听会在Activity变化时自动切换，无需手动管理
+10. 页面变化监听在服务销毁时会自动清理，防止内存泄漏
