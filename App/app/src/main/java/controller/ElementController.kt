@@ -104,6 +104,7 @@ object ElementController {
             .replace("'", "&apos;")
     }
     
+    
     private fun findWebView(activity: Activity): WebView? {
         val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
         return findWebViewRecursive(rootView)

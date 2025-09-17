@@ -25,6 +25,8 @@ import android.view.ViewTreeObserver
 import android.view.WindowManager
 import controller.ElementController
 import controller.GenericElement
+import controller.NativeController
+import controller.PageSniffer
 import org.json.JSONException
 import java.io.File
 import java.io.IOException
@@ -476,7 +478,7 @@ class MobileService : Service() {
             when (action) {
                 "speak" -> {
                     val content = args.get("message") as String
-                    mSpeech.speak(content, false)
+                    // mSpeech.speak(content, false)
                     return
                 }
                 "ask" -> {
@@ -598,14 +600,60 @@ class MobileService : Service() {
      * 执行点击动作
      */
     private fun executeClickAction(activity: Activity, element: GenericElement) {
-        ElementController.clickElement(activity, element.resourceId) { success ->
-            if (success) {
-                Log.d(TAG, "点击动作执行成功")
-                screenNeedUpdate = true
-                xmlPending = true
-            } else {
-                Log.e(TAG, "点击动作执行失败")
-                sendActionError("点击动作执行失败")
+        // 首先检查目标元素是否可点击
+        if (element.clickable && element.enabled) {
+            // 目标元素可点击，直接执行
+            ElementController.clickElement(activity, element.resourceId) { success ->
+                if (success) {
+                    Log.d(TAG, "点击动作执行成功")
+                    screenNeedUpdate = true
+                    xmlPending = true
+                } else {
+                    Log.e(TAG, "点击动作执行失败")
+                    sendActionError("点击动作执行失败")
+                }
+            }
+        } else {
+            // 目标元素不可点击，尝试查找最近的可点击节点
+            Log.d(TAG, "目标元素不可点击，尝试查找最近的可点击节点")
+            findNearestClickableNode(activity, element) { clickableElement ->
+                if (clickableElement != null) {
+                    Log.d(TAG, "找到最近的可点击节点: ${clickableElement.resourceId}")
+                    
+                    // 检查是否是可滚动的容器（如ListView、RecyclerView等）
+                    if (isScrollableContainer(clickableElement)) {
+                        // 对于可滚动容器，使用目标元素的坐标进行点击
+                        Log.d(TAG, "检测到可滚动容器，使用目标元素坐标点击")
+                        clickByCoordinate(activity, element, clickableElement) { success ->
+                            if (success) {
+                                Log.d(TAG, "使用坐标点击成功")
+                                screenNeedUpdate = true
+                                xmlPending = true
+                            } else {
+                                Log.e(TAG, "使用坐标点击失败")
+                                val remark = buildClickableNodeRemark(element, clickableElement, false)
+                                sendActionError("点击动作执行失败", remark)
+                            }
+                        }
+                    } else {
+                        // 普通元素，直接点击
+                        ElementController.clickElement(activity, clickableElement.resourceId) { success ->
+                            if (success) {
+                                Log.d(TAG, "使用最近可点击节点执行点击成功")
+                                screenNeedUpdate = true
+                                xmlPending = true
+                            } else {
+                                Log.e(TAG, "使用最近可点击节点执行点击失败")
+                                val remark = buildClickableNodeRemark(element, clickableElement, false)
+                                sendActionError("点击动作执行失败", remark)
+                            }
+                        }
+                    }
+                } else {
+                    Log.e(TAG, "未找到可点击的节点")
+                    val remark = buildNoClickableNodeRemark(element)
+                    sendActionError("点击动作执行失败", remark)
+                }
             }
         }
     }
@@ -705,7 +753,7 @@ class MobileService : Service() {
     /**
      * 发送动作错误信息
      */
-    private fun sendActionError(errorMessage: String) {
+    private fun sendActionError(errorMessage: String, remark: String = "") {
         val message = MobileGPTMessage().apply {
             messageType = MobileGPTMessage.TYPE_ERROR
             errType = MobileGPTMessage.ERROR_TYPE_ACTION
@@ -713,8 +761,172 @@ class MobileService : Service() {
             preXml = previousScreenXML
             action = currentAction
             instruction = currentInstruction
+            this.remark = remark
         }
         mExecutorService.execute { mClient?.sendMessage(message) }
+    }
+    
+    /**
+     * 查找最近的可点击节点
+     */
+    private fun findNearestClickableNode(activity: Activity, targetElement: GenericElement, callback: (GenericElement?) -> Unit) {
+        // 获取当前元素树
+        ElementController.getCurrentElementTree(activity) { elementTree ->
+            // 查找最近的可点击节点
+            val clickableElement = findNearestClickableNodeInTree(elementTree, targetElement)
+            callback(clickableElement)
+        }
+    }
+    
+    /**
+     * 在元素树中查找最近的可点击节点
+     */
+    private fun findNearestClickableNodeInTree(rootElement: GenericElement, targetElement: GenericElement): GenericElement? {
+        var nearestClickable: GenericElement? = null
+        var minDistance = Float.MAX_VALUE
+        
+        // 遍历整个元素树
+        traverseElementTree(rootElement) { element ->
+            if (element.clickable && element.enabled) {
+                val distance = calculateDistance(element.bounds, targetElement.bounds)
+                if (distance < minDistance) {
+                    minDistance = distance
+                    nearestClickable = element
+                }
+            }
+        }
+        
+        return nearestClickable
+    }
+    
+    /**
+     * 遍历元素树
+     */
+    private fun traverseElementTree(element: GenericElement, action: (GenericElement) -> Unit) {
+        action(element)
+        for (child in element.children) {
+            traverseElementTree(child, action)
+        }
+    }
+    
+    /**
+     * 计算两个边界矩形之间的距离
+     * 优先考虑包含关系和重叠面积
+     */
+    private fun calculateDistance(targetBounds: Rect, clickableBounds: Rect): Float {
+        // 1. 如果可点击元素包含目标元素，距离为0（最高优先级）
+        if (clickableBounds.contains(targetBounds)) {
+            return 0f
+        }
+        
+        // 2. 计算重叠面积
+        val overlapArea = calculateOverlapArea(targetBounds, clickableBounds)
+        if (overlapArea > 0) {
+            // 有重叠，返回负的重叠面积（重叠面积越大，距离越小）
+            return -overlapArea
+        }
+        
+        // 3. 没有重叠，计算边界之间的最小距离
+        val dx: Float = when {
+            targetBounds.right < clickableBounds.left -> (clickableBounds.left - targetBounds.right).toFloat()
+            targetBounds.left > clickableBounds.right -> (targetBounds.left - clickableBounds.right).toFloat()
+            else -> 0f
+        }
+        
+        val dy: Float = when {
+            targetBounds.bottom < clickableBounds.top -> (clickableBounds.top - targetBounds.bottom).toFloat()
+            targetBounds.top > clickableBounds.bottom -> (targetBounds.top - clickableBounds.bottom).toFloat()
+            else -> 0f
+        }
+        
+        return kotlin.math.sqrt(dx * dx + dy * dy).toFloat()
+    }
+    
+    /**
+     * 计算两个矩形的重叠面积
+     */
+    private fun calculateOverlapArea(rect1: Rect, rect2: Rect): Float {
+        val left = kotlin.math.max(rect1.left, rect2.left)
+        val top = kotlin.math.max(rect1.top, rect2.top)
+        val right = kotlin.math.min(rect1.right, rect2.right)
+        val bottom = kotlin.math.min(rect1.bottom, rect2.bottom)
+        
+        if (left < right && top < bottom) {
+            return (right - left) * (bottom - top).toFloat()
+        }
+        return 0f
+    }
+    
+    /**
+     * 构建可点击节点的remark信息
+     */
+    private fun buildClickableNodeRemark(targetElement: GenericElement, clickableElement: GenericElement, success: Boolean): String {
+        val status = if (success) "成功" else "失败"
+        val distance = calculateDistance(targetElement.bounds, clickableElement.bounds)
+        
+        return buildString {
+            append("目标元素不可点击，已尝试点击最近的可点击节点但${status}。")
+            append("目标元素: resourceId='${targetElement.resourceId}', ")
+            append("className='${targetElement.className}', ")
+            append("text='${targetElement.text}', ")
+            append("bounds=[${targetElement.bounds.left},${targetElement.bounds.top},${targetElement.bounds.right},${targetElement.bounds.bottom}]。")
+            append("实际点击元素: resourceId='${clickableElement.resourceId}', ")
+            append("className='${clickableElement.className}', ")
+            append("text='${clickableElement.text}', ")
+            append("bounds=[${clickableElement.bounds.left},${clickableElement.bounds.top},${clickableElement.bounds.right},${clickableElement.bounds.bottom}]。")
+            append("距离: ${String.format("%.1f", distance)}px")
+        }
+    }
+    
+    /**
+     * 构建未找到可点击节点的remark信息
+     */
+    private fun buildNoClickableNodeRemark(targetElement: GenericElement): String {
+        return buildString {
+            append("目标元素不可点击，且未找到任何可点击的节点。")
+            append("目标元素: resourceId='${targetElement.resourceId}', ")
+            append("className='${targetElement.className}', ")
+            append("text='${targetElement.text}', ")
+            append("bounds=[${targetElement.bounds.left},${targetElement.bounds.top},${targetElement.bounds.right},${targetElement.bounds.bottom}]。")
+            append("clickable=${targetElement.clickable}, enabled=${targetElement.enabled}")
+        }
+    }
+    
+    /**
+     * 检查元素是否是可滚动的容器
+     */
+    private fun isScrollableContainer(element: GenericElement): Boolean {
+        return element.scrollable || 
+               element.className.contains("ListView") || 
+               element.className.contains("RecyclerView") ||
+               element.className.contains("ScrollView") ||
+               element.className.contains("NestedScrollView")
+    }
+    
+    /**
+     * 使用坐标点击目标元素
+     */
+    private fun clickByCoordinate(activity: Activity, targetElement: GenericElement, containerElement: GenericElement, callback: (Boolean) -> Unit) {
+        // 计算目标元素的中心坐标
+        val centerX = (targetElement.bounds.left + targetElement.bounds.right) / 2f
+        val centerY = (targetElement.bounds.top + targetElement.bounds.bottom) / 2f
+        
+        Log.d(TAG, "使用坐标点击: ($centerX, $centerY)")
+        
+        // 使用NativeController的坐标点击功能
+        when (PageSniffer.getCurrentPageType(activity)) {
+            PageSniffer.PageType.NATIVE -> {
+                NativeController.clickByCoordinate(activity, centerX, centerY) { success ->
+                    callback(success)
+                }
+            }
+            else -> {
+                // 对于其他类型，尝试使用ElementController
+                ElementController.clickElement(activity, containerElement.resourceId) { success ->
+                    callback(success)
+                }
+            }
+        }
     }
 
 
@@ -1157,11 +1369,12 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             mClient!!.connect()
             mClient!!.receiveMessages(object : MobileGPTClient.OnMessageReceived {
                 override fun onReceived(message: String) {
-                    Thread {
+                    // 确保消息处理在主线程中执行，避免UI操作线程问题
+                    Handler(Looper.getMainLooper()).post {
                         if (message != null) {
                             handleResponse(message)
                         }
-                    }.start()
+                    }
                 }
             })
             Log.d(TAG, "成功连接到服务器")
