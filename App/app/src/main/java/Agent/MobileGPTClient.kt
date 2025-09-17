@@ -49,20 +49,74 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
     
     
     /**
-     * 发送指令到服务器
-     * @param instruction 要发送的指令
+     * 发送统一消息到服务器
+     * @param message 要发送的统一消息对象
      */
-    fun sendInstruction(instruction: String) {
-        Log.d("MobileGPTclient","发送指令")
+    fun sendMessage(message: MobileGPTMessage) {
+        Log.d("MobileGPTclient", "发送消息: ${message.getDescription()}")
         try {
             socket?.let {
-                dos?.writeByte('I'.code)
-                dos?.write((instruction + "\n").toByteArray(Charsets.UTF_8))
-                dos?.flush()
+                when (message.messageType) {
+                    MobileGPTMessage.TYPE_INSTRUCTION -> {
+                        dos?.writeByte('I'.code)
+                        dos?.write((message.instruction + "\n").toByteArray(Charsets.UTF_8))
+                        dos?.flush()
+                    }
+                    MobileGPTMessage.TYPE_SCREENSHOT -> {
+                        dos?.writeByte('S'.code)
+                        val screenshotBytes = message.getScreenshotBytes()
+                        if (screenshotBytes != null) {
+                            val size = screenshotBytes.size
+                            val fileSize = "$size\n"
+                            dos?.write(fileSize.toByteArray())
+                            dos?.write(screenshotBytes)
+                            dos?.flush()
+                        }
+                    }
+                    MobileGPTMessage.TYPE_XML -> {
+                        dos?.writeByte('X'.code)
+                        val size = message.curXml.toByteArray(Charsets.UTF_8).size
+                        val fileSize = "$size\n"
+                        dos?.write(fileSize.toByteArray())
+                        dos?.write(message.curXml.toByteArray(StandardCharsets.UTF_8))
+                        dos?.flush()
+                    }
+                    MobileGPTMessage.TYPE_QA -> {
+                        dos?.writeByte('A'.code)
+                        dos?.write((message.qaMessage + "\n").toByteArray(Charsets.UTF_8))
+                        dos?.flush()
+                    }
+                    MobileGPTMessage.TYPE_ERROR -> {
+                        dos?.writeByte('E'.code)
+                        // 构建包含preXml的错误消息
+                        val errorData = buildErrorData(message)
+                        val size = errorData.toByteArray(Charsets.UTF_8).size
+                        val fileSize = "$size\n"
+                        dos?.write(fileSize.toByteArray())
+                        dos?.write(errorData.toByteArray(StandardCharsets.UTF_8))
+                        dos?.flush()
+                    }
+                    MobileGPTMessage.TYPE_GET_ACTIONS -> {
+                        dos?.writeByte('G'.code)
+                        dos?.flush()
+                    }
+                    else -> {
+                        Log.e(TAG, "未知消息类型: ${message.messageType}")
+                    }
+                }
             } ?: Log.d(TAG, "socket not connected yet")
         } catch (e: IOException) {
             Log.e(TAG, "server offline")
         }
+    }
+
+    /**
+     * 发送指令到服务器 (保持向后兼容)
+     * @param instruction 要发送的指令
+     */
+    fun sendInstruction(instruction: String) {
+        val message = MobileGPTMessage().createInstructionMessage(instruction)
+        sendMessage(message)
     }
     // fun sendScreenshot(bitmap: Bitmap) {
     //     try {
@@ -90,106 +144,48 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
 
 
     /**
-     * 发送截图到服务器
+     * 发送截图到服务器 (保持向后兼容)
      * @param bitmap 要发送的截图
      */
     fun sendScreenshot(bitmap: Bitmap) {
-        Log.d("MobileGPTclient","发送截图")
-        try {
-            socket?.let {
-                dos?.writeByte('S'.code)
-
-                val byteArrayOutputStream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
-                val byteArray = byteArrayOutputStream.toByteArray()
-
-                val size = byteArray.size
-                val fileSize = "$size\n"
-                dos?.write(fileSize.toByteArray())
-
-                // 发送图片
-                dos?.write(byteArray)
-                dos?.flush()
-
-                Log.v(TAG, "screenshot sent successfully")
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "server offline")
-        }
+        val message = MobileGPTMessage().createScreenshotMessage(bitmap)
+        sendMessage(message)
     }
     
 
     /**
-     * 发送XML数据到服务器
+     * 发送XML数据到服务器 (保持向后兼容)
      * @param xml 要发送的XML字符串
      */
     fun sendXML(xml: String) {
-        Log.d("MobileGPTclient","发送XML")
-        try {
-            socket?.let {
-                dos?.writeByte('X'.code)
-                val size = xml.toByteArray(Charsets.UTF_8).size
-                val fileSize = "$size\n"
-                dos?.write(fileSize.toByteArray())
-
-                // 发送xml
-                dos?.write(xml.toByteArray(StandardCharsets.UTF_8))
-                dos?.flush()
-
-                Log.v(TAG, "xml sent successfully")
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "server offline")
-        }
+        val message = MobileGPTMessage().createXmlMessage(xml)
+        sendMessage(message)
     }
     
     /**
-     * 发送问答数据到服务器
+     * 发送问答数据到服务器 (保持向后兼容)
      * @param qaString 问答字符串
      */
     fun sendQA(qaString: String) {
-        Log.d("MobileGPTclient","发送问答")
-        try {
-            socket?.let {
-                dos?.writeByte('A'.code)
-                dos?.write((qaString + "\n").toByteArray(Charsets.UTF_8))
-                dos?.flush()
-                Log.d(TAG, "QA sent successfully")
-            } ?: Log.d(TAG, "socket not connected yet")
-        } catch (e: IOException) {
-            Log.d(TAG, "server offline")
-            Log.e(TAG, "IOException: ${e.message}")
-        }
+        val message = MobileGPTMessage().createQAMessage(qaString)
+        sendMessage(message)
     }
     
     /**
-     * 发送错误信息到服务器
+     * 发送错误信息到服务器 (保持向后兼容)
      * @param msg 错误消息
      */
     fun sendError(msg: String) {
-        try {
-            socket?.let {
-                dos?.writeByte('E'.code)
-                dos?.write((msg + "\n").toByteArray(Charsets.UTF_8))
-                dos?.flush()
-            } ?: Log.d(TAG, "socket not connected yet")
-        } catch (e: IOException) {
-            Log.d(TAG, "server offline")
-        }
+        val message = MobileGPTMessage().createErrorMessage(MobileGPTMessage.ERROR_TYPE_UNKNOWN, msg)
+        sendMessage(message)
     }
     
     /**
-     * 请求获取操作列表
+     * 请求获取操作列表 (保持向后兼容)
      */
     fun getActions() {
-        try {
-            socket?.let {
-                dos?.writeByte('G'.code)
-                dos?.flush()
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "server offline")
-        }
+        val message = MobileGPTMessage().createGetActionsMessage()
+        sendMessage(message)
     }
     
     /**
@@ -208,6 +204,41 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
                 e.printStackTrace()
             }
         }.start()
+    }
+    
+    /**
+     * 构建错误数据，包含preXml信息
+     * @param message 错误消息对象
+     * @return 格式化的错误数据字符串
+     */
+    private fun buildErrorData(message: MobileGPTMessage): String {
+        val errorData = StringBuilder()
+        errorData.append("ERROR_TYPE:${message.errType}\n")
+        errorData.append("ERROR_MESSAGE:${message.errMessage}\n")
+        
+        // 如果有preXml，则包含在错误数据中
+        if (message.preXml.isNotEmpty()) {
+            errorData.append("PRE_XML:\n")
+            errorData.append(message.preXml)
+            errorData.append("\n")
+        }
+        
+        // 如果有当前动作信息，也包含进去
+        if (message.action.isNotEmpty()) {
+            errorData.append("ACTION:${message.action}\n")
+        }
+        
+        // 如果有当前指令信息，也包含进去
+        if (message.instruction.isNotEmpty()) {
+            errorData.append("INSTRUCTION:${message.instruction}\n")
+        }
+        
+        // 如果有备注信息，也包含进去
+        if (message.remark.isNotEmpty()) {
+            errorData.append("REMARK:${message.remark}\n")
+        }
+        
+        return errorData.toString()
     }
     
     /**

@@ -65,6 +65,9 @@ class MobileService : Service() {
     private lateinit var mExecutorService: ExecutorService
     private val mainThreadHandler = Handler(Looper.getMainLooper())
     private var currentScreenXML = ""
+    private var previousScreenXML = ""  // 记录上一次的XML
+    private var currentAction = ""      // 记录当前执行的动作
+    private var currentInstruction = "" // 记录当前发送的指令
     private var currentScreenShot: Bitmap? = null
     private lateinit var fileDirectory: File
     private var screenUpdateRunnable: Runnable? = null
@@ -88,7 +91,11 @@ class MobileService : Service() {
                 Log.d(TAG, "receive broadcast")
                 mExecutorService.execute { 
                     initNetworkConnection()
-                    mClient?.sendInstruction(instruction!!)
+                    // 记录当前发送的指令
+                    currentInstruction = instruction!!
+                    Log.d(TAG, "记录当前发送的指令: $currentInstruction")
+                    val message = MobileGPTMessage().createInstructionMessage(instruction)
+                    mClient?.sendMessage(message)
                     // 发送指令后启动屏幕更新
                     mainThreadHandler.post {
                         startPeriodicScreenUpdate()
@@ -196,7 +203,8 @@ class MobileService : Service() {
      */
     fun sendAnswer(infoName: String, question: String, answer: String) {
         val qaString = "$infoName\\$question\\$answer"
-        mClient?.sendQA(qaString)
+        val message = MobileGPTMessage().createQAMessage(qaString)
+        mClient?.sendMessage(message)
     }
 
     /**
@@ -233,6 +241,10 @@ class MobileService : Service() {
             val gptMessage = GPTMessage(message)
             val action = gptMessage.getActionName()
             val args = gptMessage.getArgs()
+            
+            // 记录当前执行的动作
+            currentAction = action
+            Log.d(TAG, "记录当前执行的动作: $action")
 
             when (action) {
                 "speak" -> {
@@ -254,7 +266,15 @@ class MobileService : Service() {
         } catch (e: JSONException) {
             val error = "The action has wrong parameters. Make sure you have put all parameters correctly."
             e.printStackTrace()
-            mExecutorService.execute { mClient?.sendError(error) }
+            val message = MobileGPTMessage().apply {
+                messageType = MobileGPTMessage.TYPE_ERROR
+                errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                errMessage = error
+                preXml = previousScreenXML  // 包含上一次的XML
+                action = currentAction      // 包含当前执行的动作
+                instruction = currentInstruction // 包含当前发送的指令
+            }
+            mExecutorService.execute { mClient?.sendMessage(message) }
             Log.e(TAG, "wrong json format")
         }
     }
@@ -289,6 +309,12 @@ class MobileService : Service() {
         nodeMap = HashMap()
         Log.d(TAG, "Node Renewed!!!!!!!")
         
+        // 在更新当前XML之前，先保存上一次的XML
+        if (currentScreenXML.isNotEmpty()) {
+            previousScreenXML = currentScreenXML
+            Log.d(TAG, "已保存上一次的XML，长度: ${previousScreenXML.length}")
+        }
+        
         // 获取当前Activity
         val currentActivity = ActivityTracker.getCurrentActivity()
         if (currentActivity == null) {
@@ -301,7 +327,7 @@ class MobileService : Service() {
         ElementController.getCurrentElementTree(currentActivity) { genericElement ->
             // 将GenericElement转换为XML字符串
             currentScreenXML = convertGenericElementToXmlString(genericElement)
-            Log.d(TAG, "元素树XML生成完成")
+            Log.d(TAG, "元素树XML生成完成，当前XML长度: ${currentScreenXML.length}")
         }
     }
 
@@ -517,7 +543,8 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 mExecutorService.execute { 
                     try {
                         Log.d("MobileService", "开始发送截图")
-                        mClient?.sendScreenshot(screenshot)
+                        val message = MobileGPTMessage().createScreenshotMessage(screenshot)
+                        mClient?.sendMessage(message)
                     } catch (e: Exception) {
                         Log.e("MobileService", "发送截图失败", e)
                     }
@@ -530,7 +557,8 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             mExecutorService.execute { 
                 try {
                     Log.d("MobileService", "开始发送XML")
-                   mClient?.sendXML(currentScreenXML)
+                    val message = MobileGPTMessage().createXmlMessage(currentScreenXML)
+                    mClient?.sendMessage(message)
                 } catch (e: Exception) {
                     Log.e("MobileService", "发送XML失败", e)
                 }
@@ -546,7 +574,8 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     fun showActions() {
         // 因操作弹窗导致不发送屏幕
         xmlPending = false
-        mExecutorService.execute { mClient?.getActions() }
+        val message = MobileGPTMessage().createGetActionsMessage()
+        mExecutorService.execute { mClient?.sendMessage(message) }
     }
 
     /**
@@ -556,7 +585,15 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         mainThreadHandler.removeCallbacks(actionFailedRunnable!!)
         actionFailedRunnable = Runnable {
             Log.e(TAG, reason)
-            mExecutorService.execute { mClient?.sendError(reason) }
+            val message = MobileGPTMessage().apply {
+                messageType = MobileGPTMessage.TYPE_ERROR
+                errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                errMessage = reason
+                preXml = previousScreenXML  // 包含上一次的XML
+                action = currentAction      // 包含当前执行的动作
+                instruction = currentInstruction // 包含当前发送的指令
+            }
+            mExecutorService.execute { mClient?.sendMessage(message) }
         }
         mainThreadHandler.postDelayed(actionFailedRunnable!!, delay.toLong())
     }
@@ -586,6 +623,10 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         xmlPending = false
         screenNeedUpdate = false
         firstScreen = false
+        currentScreenXML = ""
+        previousScreenXML = ""  // 重置上一次的XML
+        currentAction = ""      // 重置当前执行的动作
+        currentInstruction = "" // 重置当前发送的指令
         mMobileGPTGlobal = MobileGPTGlobal.reset()
 
                 
