@@ -19,6 +19,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import android.view.PixelCopy
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import controller.ElementController
 import controller.GenericElement
@@ -51,6 +52,9 @@ class MobileService : Service() {
     var screenNeedUpdate = false
     var firstScreen = false
     private var actionFailedRunnable: Runnable? = null
+    private var screenUpdateTimeoutRunnable: Runnable? = null
+    private var screenUpdateWaitRunnable: Runnable? = null
+    private var clickRetryRunnable: Runnable? = null
     private lateinit var mExecutorService: ExecutorService
     private val mainThreadHandler = Handler(Looper.getMainLooper())
     private var currentScreenXML = ""
@@ -61,6 +65,14 @@ class MobileService : Service() {
     private lateinit var fileDirectory: File
     private var screenUpdateRunnable: Runnable? = null
     private var isScreenUpdateEnabled = false
+    
+    // 页面变化监听相关变量
+    private var currentViewTreeObserver: ViewTreeObserver? = null
+    private var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    private var currentMonitoredActivity: Activity? = null
+    private var lastPageChangeTime = 0L
+    private var pageChangeDebounceRunnable: Runnable? = null
+    private val PAGE_CHANGE_DEBOUNCE_DELAY = 500L // 防抖延迟500ms
 
     /**
      * 本地绑定器类
@@ -165,6 +177,30 @@ class MobileService : Service() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         mSpeech = MobileGPTSpeechRecognizer(this)
         mMobileGPTGlobal = MobileGPTGlobal.getInstance()
+
+        // 初始化Runnable
+        screenUpdateWaitRunnable = object : Runnable {
+            override fun run() {
+                Log.d(TAG, "screen update waited")
+                mainThreadHandler.removeCallbacks(screenUpdateTimeoutRunnable!!)
+                // 使用回调确保saveCurrScreen完成后再调用sendScreen
+                saveCurrScreen()
+                sendScreen()
+            }
+        }
+
+        screenUpdateTimeoutRunnable = object : Runnable {
+            override fun run() {
+                Log.d(TAG, "screen update timeout")
+                mainThreadHandler.removeCallbacks(screenUpdateWaitRunnable!!)
+                // 使用回调确保saveCurrScreen完成后再调用sendScreen
+                saveCurrScreen()
+                sendScreen()
+            }
+        }
+
+        // 初始化页面变化监听
+        initPageChangeListener()
 
         // 延迟初始化网络连接，不阻塞服务启动
         mExecutorService.execute {
@@ -624,7 +660,15 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 
         // 停止屏幕更新
         stopPeriodicScreenUpdate()
-     
+        
+        // 清理页面变化监听
+        removeViewTreeObserver()
+        ActivityTracker.setActivityChangeListener(null)
+
+        // 清理防抖任务
+        pageChangeDebounceRunnable?.let {
+            mainThreadHandler.removeCallbacks(it)
+        }
 
 //        mainThreadHandler.post {
 //            mSpeech = MobileGPTSpeechRecognizer(this@MobileService)
@@ -700,6 +744,15 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             // 停止屏幕更新
             stopPeriodicScreenUpdate()
             
+            // 清理页面变化监听
+            removeViewTreeObserver()
+            ActivityTracker.setActivityChangeListener(null)
+
+            // 清理防抖任务
+            pageChangeDebounceRunnable?.let {
+                mainThreadHandler.removeCallbacks(it)
+            }
+            
             // 清理截图资源
             recycleOldScreenshot()
             currentScreenShot = null
@@ -743,6 +796,184 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             Log.e(TAG, "服务器连接失败: ${e.message}", e)
         } catch (e: Exception) {
             Log.e(TAG, "网络连接初始化过程中发生未知错误: ${e.message}", e)
+        }
+    }
+
+    /**
+     * 初始化页面变化监听
+     */
+    private fun initPageChangeListener() {
+        // 设置Activity变化监听器
+        ActivityTracker.setActivityChangeListener(object : ActivityTracker.ActivityChangeListener {
+            override fun onActivityChanged(newActivity: Activity?, oldActivity: Activity?) {
+                Log.d(TAG, "Activity变化: ${oldActivity?.javaClass?.simpleName} -> ${newActivity?.javaClass?.simpleName}")
+
+                // 在主线程中处理Activity变化
+                mainThreadHandler.post {
+                    handleActivityChange(newActivity, oldActivity)
+                }
+            }
+        })
+
+        // 如果当前已有Activity，立即开始监听
+        val currentActivity = ActivityTracker.getCurrentActivity()
+        if (currentActivity != null) {
+            mainThreadHandler.post {
+                setupViewTreeObserver(currentActivity)
+            }
+        }
+    }
+
+    /**
+     * 处理Activity变化
+     * @param newActivity 新的Activity
+     * @param oldActivity 旧的Activity
+     */
+    private fun handleActivityChange(newActivity: Activity?, oldActivity: Activity?) {
+        try {
+            // 移除旧Activity的ViewTreeObserver监听
+            removeViewTreeObserver()
+
+            // 如果有新Activity，设置新的ViewTreeObserver监听
+            if (newActivity != null) {
+                setupViewTreeObserver(newActivity)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "处理Activity变化时发生异常", e)
+        }
+    }
+
+    /**
+     * 设置ViewTreeObserver监听
+     * @param activity 要监听的Activity
+     */
+    private fun setupViewTreeObserver(activity: Activity) {
+        try {
+            removeViewTreeObserver() // 先移除旧的监听
+
+            val rootView = activity.window?.decorView?.rootView
+            if (rootView == null) {
+                Log.w(TAG, "无法获取根视图，跳过ViewTreeObserver设置")
+                return
+            }
+
+            currentViewTreeObserver = rootView.viewTreeObserver
+            currentMonitoredActivity = activity
+
+            globalLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+                try {
+                    val currentTime = System.currentTimeMillis()
+                    // 防抖处理：如果距离上次变化时间太短，则忽略
+                    if (currentTime - lastPageChangeTime < PAGE_CHANGE_DEBOUNCE_DELAY) {
+                        return@OnGlobalLayoutListener
+                    }
+                    lastPageChangeTime = currentTime
+
+                    // 取消之前的防抖任务
+                    pageChangeDebounceRunnable?.let {
+                        mainThreadHandler.removeCallbacks(it)
+                    }
+
+                    // 设置新的防抖任务
+                    pageChangeDebounceRunnable = Runnable {
+                        onPageChanged("ViewTreeObserver检测到布局变化")
+                    }
+                    mainThreadHandler.postDelayed(pageChangeDebounceRunnable!!, PAGE_CHANGE_DEBOUNCE_DELAY)
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "ViewTreeObserver回调中发生异常", e)
+                }
+            }
+
+            currentViewTreeObserver?.addOnGlobalLayoutListener(globalLayoutListener)
+            Log.d(TAG, "ViewTreeObserver监听已设置，Activity: ${activity.javaClass.simpleName}")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "设置ViewTreeObserver时发生异常", e)
+        }
+    }
+
+    /**
+     * 移除ViewTreeObserver监听
+     */
+    private fun removeViewTreeObserver() {
+        try {
+            currentViewTreeObserver?.let { observer ->
+                globalLayoutListener?.let { listener ->
+                    if (observer.isAlive) {
+                        observer.removeOnGlobalLayoutListener(listener)
+                    }
+                }
+            }
+            currentViewTreeObserver = null
+            globalLayoutListener = null
+            currentMonitoredActivity = null
+            Log.d(TAG, "ViewTreeObserver监听已移除")
+        } catch (e: Exception) {
+            Log.e(TAG, "移除ViewTreeObserver时发生异常", e)
+        }
+    }
+
+    /**
+     * 处理页面变化
+     * @param reason 变化原因
+     */
+    private fun onPageChanged(reason: String) {
+        val currentTime = System.currentTimeMillis()
+        Log.d(TAG, "处理页面变化: $reason")
+        WaitScreenUpdate()
+    }
+
+    /**
+     * 手动触发页面变化检测
+     */
+    fun triggerPageChangeDetection() {
+        Log.d(TAG, "手动触发页面变化检测")
+        onPageChanged("手动触发检测")
+    }
+
+    /**
+     * 检查页面变化监听是否活跃
+     * @return 是否活跃
+     */
+    fun isPageChangeListenerActive(): Boolean {
+        return currentViewTreeObserver != null &&
+               globalLayoutListener != null &&
+               currentMonitoredActivity != null
+    }
+
+    /**
+     * 等待屏幕更新
+     */
+    private fun WaitScreenUpdate() {
+        // xmlPending主要为了控制该函数是否需要响应页面变化，例如在showActions时，避免因为弹出悬浮窗导致监听页面变化进而发送XML
+        if (xmlPending) {
+            if (firstScreen && screenNeedUpdate) {
+                // for First screen, we wait 5 s for loading app
+                Log.d(TAG, "第一次打开应用，设置延迟强制发送")
+                screenUpdateTimeoutRunnable?.let {
+                    mainThreadHandler.postDelayed(it, 2000)
+                }
+                screenNeedUpdate = false
+
+            } else if (!firstScreen) {
+                if (screenNeedUpdate) {
+                    Log.d(TAG, "设置防抖等待发送以及延迟强制发送")
+                } else {
+                    Log.d(TAG, "只设置防抖等待发送")
+                }
+                if (screenNeedUpdate) {
+                    // 取消点击动作的回调
+                    clickRetryRunnable?.let {
+                        mainThreadHandler.removeCallbacks(it)
+                    }
+                    // 设置延迟强制发送
+                    screenUpdateTimeoutRunnable?.let {
+                        mainThreadHandler.postDelayed(it, 2000)
+                    }
+                    screenNeedUpdate = false
+                }
+            }
         }
     }
 }

@@ -267,6 +267,9 @@ test-output/
 coverage/
 .nyc_output
 
+# old files
+old/
+
 # OS-specific files
 .DS_Store
 .DS_Store?
