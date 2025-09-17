@@ -60,7 +60,7 @@ def get_sys_prompt(available_subtasks):
     return sys_msg
 
 
-def get_usr_prompt(instruction, subtask_history, qa_history, screen):
+def get_usr_prompt(instruction, subtask_history, qa_history, screen, suggestions):
     if len(subtask_history) == 0:
         numbered_subtask_history = "0. No event yet.\n"
     else:
@@ -71,7 +71,14 @@ def get_usr_prompt(instruction, subtask_history, qa_history, screen):
     else:
         numbered_qa_history = generate_numbered_list(qa_history)
 
-    usr_msg = (
+    usr_msg = ""
+    if len(suggestions) > 0:
+        usr_msg += (
+            "***Useful Suggestions***:\n"
+            "Consider the following suggestions when selecting your next action:\n"
+            f"{suggestions}\n\n"
+        )
+    usr_msg += (
         f"User's Request: {instruction}\n\n"
 
         "QA List:\n"
@@ -94,9 +101,9 @@ def get_usr_prompt(instruction, subtask_history, qa_history, screen):
     return usr_msg
 
 
-def get_prompts(instruction: str, available_subtasks: list, subtask_history: list, qa_history: list, screen: str):
+def get_prompts(instruction: str, available_subtasks: list, subtask_history: list, qa_history: list, screen: str, suggestions: list):
     sys_msg = get_sys_prompt(available_subtasks)
-    usr_msg = get_usr_prompt(instruction, subtask_history, qa_history, screen)
+    usr_msg = get_usr_prompt(instruction, subtask_history, qa_history, screen, suggestions)
     messages = [{"role": "system", "content": sys_msg},
                 {"role": "user", "content": usr_msg}]
     return messages
