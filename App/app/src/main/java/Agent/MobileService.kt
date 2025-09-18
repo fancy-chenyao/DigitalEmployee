@@ -123,6 +123,10 @@ class MobileService : Service() {
                 screenNeedUpdate = true;
                 firstScreen = true;
                 WaitScreenUpdate()
+            } else if (intent.action == "com.example.emplab.TRIGGER_PAGE_CHANGE") {
+                // 处理页面变化触发广播
+                Log.d(TAG, "收到页面变化触发广播")
+                triggerPageChangeDetection()
             }
         }
     }
@@ -185,6 +189,7 @@ class MobileService : Service() {
         
         // 注册广播接收器
         val intentFilter = IntentFilter(MobileGPTGlobal.STRING_ACTION)
+        intentFilter.addAction("com.example.emplab.TRIGGER_PAGE_CHANGE")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stringReceiver, intentFilter, RECEIVER_NOT_EXPORTED)
         } else {
@@ -353,6 +358,7 @@ class MobileService : Service() {
              globalLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
                  try {
                      // 视图树发生变化时调用
+                     Log.d(TAG, "ViewTreeObserver触发 - xmlPending: $xmlPending, screenNeedUpdate: $screenNeedUpdate")
                      onPageChanged("视图树布局变化")
                  } catch (e: Exception) {
                      Log.e(TAG, "处理视图树变化时发生异常", e)

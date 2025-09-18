@@ -65,7 +65,7 @@ class MobileGPT:
 
         log('Mobile Agent Initialized for Task: ' + task['name'])
 
-    def get_next_action(self, parsed_xml=None, hierarchy_xml=None, encoded_xml=None):
+    def get_next_action(self, parsed_xml=None, hierarchy_xml=None, encoded_xml=None, subtask_failed=False, action_failed=False, suggestions=None):
         log(":::::::::MobileGPT received new screen:::::::::", 'red')
         parsed_xml = parsed_xml or self.parsed_xml
         hierarchy_xml = hierarchy_xml or self.hierarchy_xml
@@ -106,7 +106,7 @@ class MobileGPT:
                 # 调用SelectAgent.select：结合历史和当前界面选择子任务
                 response, new_action = self.select_agent.select(available_subtasks, self.subtask_history,
                                                                 self.qa_history,
-                                                                encoded_xml)
+                                                                encoded_xml, subtask_failed, suggestions)
                 # 若生成了新动作，添加到内存（供后续复用）
                 if new_action:
                     self.memory.add_new_action(new_action, page_index)
@@ -156,7 +156,7 @@ class MobileGPT:
             self.subtask_status = Status.RECALL
             # 若内存中有动作示例，调用推导智能体泛化动作（适配当前界面）
             if "examples" in next_action:
-                next_action, example = self.derive_agent.derive(self.encoded_xml, examples=next_action['examples'])
+                next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions, examples=next_action['examples'])
                 current_action_data['action'] = next_action
                 current_action_data['example'] = example
 
@@ -166,7 +166,7 @@ class MobileGPT:
             if self.subtask_status == Status.WAIT or self.subtask_status == Status.LEARN:
                 self.subtask_status = Status.LEARN
                 # Here
-                next_action, example = self.derive_agent.derive(self.encoded_xml)
+                next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions)
                 current_action_data['action'] = next_action
                 current_action_data['example'] = example
 

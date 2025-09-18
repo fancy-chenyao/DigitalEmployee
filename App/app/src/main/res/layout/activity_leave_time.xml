@@ -261,6 +261,13 @@
 
     </ScrollView>
 
+    <!-- 自定义日期选择器容器 -->
+    <FrameLayout
+        android:id="@+id/datePickerContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone" />
+
     <!-- 底部确认按钮 -->
     <LinearLayout
         android:layout_width="match_parent"
