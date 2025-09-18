@@ -394,12 +394,77 @@ class AsyncProcessor:
                 log("MobileGPT实例memory属性为空，跳过XML处理", "yellow")
                 return {"status": "xml_skipped", "reason": "no_memory", "session_id": session_id}
             
-            # 解析XML数据
-            from screenParser.Encoder import xmlEncoder
-            screen_parser = xmlEncoder()
-            
-            # 解析XML
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+            # 严格按照策略选择存储位置：DB可用→只写DB临时集合；否则→只写本地
+            from env_config import Config
+            from utils.mongo_utils import check_connection, get_db
+            db_available = bool(Config.ENABLE_DB) and check_connection()
+
+            if db_available:
+                # 仅解析到内存并写 Mongo 临时集合
+                from screenParser import parseXML
+                import xml.etree.ElementTree as ET
+                parsed_xml = parseXML.parse(xml_content)
+                hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+                tree = ET.fromstring(parsed_xml)
+                for element in tree.iter():
+                    for k in ("bounds", "important", "class"):
+                        if k in element.attrib:
+                            del element.attrib[k]
+                encoded_xml = ET.tostring(tree, encoding='unicode')
+
+                try:
+                    db = get_db()
+                    temp_xmls = db['temp_xmls']
+                    task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'session') or 'session'
+                    screen_count = getattr(mobilegpt, '_screen_count', 0)
+                    setattr(mobilegpt, '_screen_count', screen_count + 1)
+                    docs = [
+                        {"task_name": task_name, "xml_type": "raw", "screen_count": screen_count, "xml_content": xml_content},
+                        {"task_name": task_name, "xml_type": "parsed", "screen_count": screen_count, "xml_content": parsed_xml},
+                        {"task_name": task_name, "xml_type": "hierarchy", "screen_count": screen_count, "xml_content": hierarchy_xml},
+                        {"task_name": task_name, "xml_type": "encoded", "screen_count": screen_count, "xml_content": encoded_xml},
+                    ]
+                    for d in docs:
+                        temp_xmls.replace_one(
+                            {"task_name": d["task_name"], "xml_type": d["xml_type"], "screen_count": d["screen_count"]},
+                            d,
+                            upsert=True,
+                        )
+                except Exception:
+                    pass
+            else:
+                # 仅写本地
+                from screenParser.Encoder import xmlEncoder
+                from datetime import datetime
+                import os
+
+                screen_parser = xmlEncoder()
+                task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'session') or 'session'
+                # 复用会话时间戳目录
+                ts = getattr(mobilegpt, '_log_ts', None)
+                if not ts:
+                    ts = datetime.now().strftime("%Y_%m_%d_%H-%M-%S")
+                    setattr(mobilegpt, '_log_ts', ts)
+                log_dir = getattr(mobilegpt, '_log_dir', None)
+                if not log_dir:
+                    log_dir = os.path.join(Config.LOG_DIRECTORY, task_name, ts)
+                    setattr(mobilegpt, '_log_dir', log_dir)
+                screen_parser.init(log_dir)
+
+                xmls_dir = os.path.join(log_dir, 'xmls')
+                next_index = 0
+                try:
+                    existing = [f for f in os.listdir(xmls_dir) if f.endswith('.xml') and '_' not in f]
+                    nums = []
+                    for f in existing:
+                        try:
+                            nums.append(int(os.path.splitext(f)[0]))
+                        except Exception:
+                            pass
+                    next_index = (max(nums) + 1) if nums else 0
+                except Exception:
+                    next_index = 0
+                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, next_index)
             
             log(f"XML异步解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
@@ -431,16 +496,58 @@ class AsyncProcessor:
             }
     
     def _process_screenshot(self, data: dict) -> dict:
-        """处理截图相关任务"""
-        # 这里可以调用截图处理相关的方法
-        # 例如：保存截图、图像分析等
+        """处理截图相关任务（按策略保存到 DB 或本地）"""
         screenshot_data = data.get('screenshot', b'')
-        if screenshot_data:
-            # 可以在这里添加截图处理逻辑
-            # 例如：保存到文件、进行图像分析等
-            log(f"处理截图数据，大小: {len(screenshot_data)} 字节", "blue")
-        
-        return {"status": "screenshot_processed", "data_size": len(screenshot_data)}
+        session_id = data.get('session_id', '')
+        mobilegpt = data.get('mobilegpt')
+        if not screenshot_data:
+            return {"status": "screenshot_skipped", "reason": "empty", "session_id": session_id}
+
+        try:
+            from env_config import Config
+            from utils.mongo_utils import check_connection, get_db
+            from datetime import datetime
+            import os, base64
+
+            task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'session') or 'session'
+            db_available = bool(Config.ENABLE_DB) and check_connection()
+
+            # 统一递增 screen_count（与XML一致）
+            screen_count = getattr(mobilegpt, '_screen_count', 0)
+            setattr(mobilegpt, '_screen_count', screen_count + 1)
+
+            if db_available:
+                try:
+                    db = get_db()
+                    temp_screenshots = db['temp_screenshots']
+                    b64 = base64.b64encode(screenshot_data).decode('utf-8')
+                    temp_screenshots.replace_one(
+                        {"task_name": task_name, "screen_count": screen_count},
+                        {"task_name": task_name, "screen_count": screen_count, "screenshot": b64, "created_at": datetime.now()},
+                        upsert=True,
+                    )
+                except Exception:
+                    pass
+            else:
+                # 本地保存图片
+                ts = getattr(mobilegpt, '_log_ts', None)
+                if not ts:
+                    ts = datetime.now().strftime("%Y_%m_%d_%H-%M-%S")
+                    setattr(mobilegpt, '_log_ts', ts)
+                log_dir = getattr(mobilegpt, '_log_dir', None)
+                if not log_dir:
+                    log_dir = os.path.join(Config.LOG_DIRECTORY, task_name, ts)
+                    setattr(mobilegpt, '_log_dir', log_dir)
+                screenshots_dir = os.path.join(log_dir, 'screenshots')
+                os.makedirs(screenshots_dir, exist_ok=True)
+                file_path = os.path.join(screenshots_dir, f"{screen_count}.jpg")
+                with open(file_path, 'wb') as f:
+                    f.write(screenshot_data)
+
+            return {"status": "screenshot_processed", "data_size": len(screenshot_data), "session_id": session_id}
+        except Exception as e:
+            log(f"截图处理失败: {e}", "red")
+            return {"status": "screenshot_failed", "error": str(e), "session_id": session_id}
     
     def _process_ai_inference(self, data: dict) -> dict:
         """处理AI推理任务"""
