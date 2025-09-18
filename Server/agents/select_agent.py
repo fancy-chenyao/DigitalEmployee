@@ -11,16 +11,20 @@ class SelectAgent:
         self.memory = memory
         self.instruction = instruction
 
-    def select(self, available_subtasks: list, subtask_history: list, qa_history: list, screen: str, suggestions=None) -> (dict, dict):
+    def select(self, available_subtasks: list, subtask_history: list, qa_history: list, screen: str, subtask_failed=False, suggestions=None) -> (dict, dict):
         log(f":::SELECT:::", "blue")
         # 用户原始指令（子任务选择的目标依据）
         # 当前可执行子任务列表（LLM只能从这里选，或新增）
         # 子任务历史（避免重复选择已完成的子任务）
         # 问答历史（补充用户提供的参数信息，如消息内容）
         # 界面XML（LLM可分析界面元素，判断子任务可行性）
-        if suggestions is None:
-            suggestions = []
-        select_prompts = select_agent_prompt.get_prompts(self.instruction, available_subtasks, subtask_history, qa_history, screen, suggestions)
+        # 建议
+        if subtask_failed:
+            select_prompts = select_agent_prompt.get_prompts(self.instruction, available_subtasks, subtask_history,
+                                                             qa_history, screen, suggestions)
+        else:
+            select_prompts = select_agent_prompt.get_prompts(self.instruction, available_subtasks, subtask_history, qa_history, screen)
+
         response = query(select_prompts, model=os.getenv("SELECT_AGENT_GPT_VERSION"))
         
         # Check if response is valid JSON
