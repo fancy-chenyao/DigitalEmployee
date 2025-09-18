@@ -302,14 +302,31 @@ tatus
 
 # Log and debug files (but keep important XML resources)
 Server/memory/log/
-Server/memory/xmls/
-Server/*.xml
 memory/log/
-memory/xmls/
-*.jpg
-*.jpeg
-*.png
-*.csv
+
+# 忽略Server目录下的临时XML文件
+Server/0_*.xml
+Server/*_encoded.xml
+Server/*_hierarchy_parsed.xml
+Server/*_parsed.xml
+Server/*_pretty.xml
+
+# 忽略Server目录下的截图文件
+Server/memory/**/screenshot.*
+Server/memory/**/screen/*.xml
+
+# 但是保留重要的配置文件
+!Server/memory/apps.csv
+!Server/memory/pages.csv
+!Server/memory/tasks.csv
+!Server/memory/hierarchy.csv
+
+# 保留Android资源文件
+!App/app/src/main/res/**/*.xml
+!App/app/src/main/res/**/*.png
+!App/app/src/main/res/**/*.jpg
+!App/app/src/main/res/**/*.webp
+!App/app/src/main/AndroidManifest.xml
 
 # Backup files
 *.bak
@@ -415,3 +432,33 @@ jspm_packages/
 
 # Yarn Integrity file
 .yarn-integrity
+
+# ===========================================
+# 项目特定文件补充
+# ===========================================
+
+# 项目根目录临时文件
+explain.png
+
+# Kotlin编译缓存
+*.kotlin_module
+
+# Android Studio 4.0+
+.idea/navEditor.xml
+.idea/deploymentTargetDropDown.xml
+.idea/assetWizardSettings.xml
+
+# Gradle 7.0+
+.gradle/7.0/
+.gradle/7.1/
+.gradle/7.2/
+.gradle/7.3/
+.gradle/7.4/
+.gradle/7.5/
+.gradle/7.6/
+.gradle/8.0/
+.gradle/8.1/
+.gradle/8.2/
+.gradle/8.3/
+.gradle/8.4/
+.gradle/8.5/

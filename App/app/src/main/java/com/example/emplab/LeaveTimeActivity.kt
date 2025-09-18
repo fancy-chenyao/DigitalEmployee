@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -17,11 +18,15 @@ class LeaveTimeActivity : AppCompatActivity() {
     private lateinit var tvStartTimeType: TextView
     private lateinit var tvEndTimeType: TextView
     private lateinit var btnConfirm: Button
+    private lateinit var datePickerContainer: FrameLayout
     
     private var startDate: Date = Date()
     private var endDate: Date = Date()
     private var startTimeType = "全天"
     private var endTimeType = "全天"
+    
+    private var customDatePicker: CustomDatePickerView? = null
+    private var isSelectingStartDate = true
     
     private val dateFormat = SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault())
     
@@ -40,6 +45,10 @@ class LeaveTimeActivity : AppCompatActivity() {
         tvStartTimeType = findViewById(R.id.tvStartTimeType)
         tvEndTimeType = findViewById(R.id.tvEndTimeType)
         btnConfirm = findViewById(R.id.btnConfirm)
+        datePickerContainer = findViewById(R.id.datePickerContainer)
+        
+        // 初始化自定义日期选择器
+        initCustomDatePicker()
     }
     
     private fun setupClickListeners() {
@@ -50,12 +59,12 @@ class LeaveTimeActivity : AppCompatActivity() {
         
         // 开始日期点击
         findViewById<LinearLayout>(R.id.layoutStartDate).setOnClickListener {
-            showDatePickerDialog(true)
+            showCustomDatePicker(true)
         }
         
         // 结束日期点击
         findViewById<LinearLayout>(R.id.layoutEndDate).setOnClickListener {
-            showDatePickerDialog(false)
+            showCustomDatePicker(false)
         }
         
         // 开始时间类型点击
@@ -153,5 +162,77 @@ class LeaveTimeActivity : AppCompatActivity() {
         val end = calendar.get(Calendar.DAY_OF_YEAR)
         
         return end - start + 1
+    }
+    
+    /**
+     * 初始化自定义日期选择器
+     */
+    private fun initCustomDatePicker() {
+        customDatePicker = CustomDatePickerView(this)
+        datePickerContainer.addView(customDatePicker)
+        
+        // 设置日期选择监听器
+        customDatePicker?.setOnDateSelectedListener { selectedDate ->
+            if (isSelectingStartDate) {
+                startDate = selectedDate
+                // 如果开始日期晚于结束日期，自动调整结束日期
+                if (startDate.after(endDate)) {
+                    endDate = startDate
+                }
+            } else {
+                endDate = selectedDate
+                // 如果结束日期早于开始日期，自动调整开始日期
+                if (endDate.before(startDate)) {
+                    startDate = endDate
+                }
+            }
+            updateDisplay()
+        }
+        
+        // 设置取消监听器
+        customDatePicker?.setOnCancelListener {
+            hideCustomDatePicker()
+        }
+    }
+    
+    /**
+     * 显示自定义日期选择器
+     */
+    private fun showCustomDatePicker(isStartDate: Boolean) {
+        isSelectingStartDate = isStartDate
+        
+        // 设置当前选中的日期
+        val currentDate = if (isStartDate) startDate else endDate
+        customDatePicker?.setSelectedDate(currentDate)
+        
+        // 显示日期选择器
+        customDatePicker?.show()
+        datePickerContainer.visibility = View.VISIBLE
+        
+        Log.d("LeaveTimeActivity", "显示自定义日期选择器 - 等待ViewTreeObserver自动检测")
+        // 不再手动触发，依赖ViewTreeObserver自动检测
+    }
+    
+    /**
+     * 隐藏自定义日期选择器
+     */
+    private fun hideCustomDatePicker() {
+        customDatePicker?.hide()
+        datePickerContainer.visibility = View.GONE
+        
+        Log.d("LeaveTimeActivity", "隐藏自定义日期选择器 - 等待ViewTreeObserver自动检测")
+        // 不再手动触发，依赖ViewTreeObserver自动检测
+    }
+    
+    /**
+     * 触发页面变化检测
+     */
+    private fun triggerPageChangeDetection() {
+        // 这里可以调用MobileService的页面变化检测方法
+        // 由于LeaveTimeActivity没有直接访问MobileService的权限，
+        // 可以通过广播或其他方式通知MobileService
+        Log.d("LeaveTimeActivity", "触发页面变化检测 - 日期选择器状态: ${customDatePicker?.isShowing()}")
+        val intent = Intent("com.example.emplab.TRIGGER_PAGE_CHANGE")
+        sendBroadcast(intent)
     }
 }
