@@ -15,9 +15,15 @@ class TaskAgent:
     def __init__(self):
         # 使用 MongoDB 集合 'global_tasks' 持久化
         self.collection = 'global_tasks'
-        self.database = load_dataframe(self.collection, ['name', 'description', 'parameters']) #应去掉保存的app字段
+        self.database = load_dataframe(self.collection, ['name', 'description', 'parameters'])
+        self._cache_dirty = False  # 缓存脏标记
 
     def get_task(self, instruction) -> (dict, bool):
+        # 如果缓存脏了，重新加载数据
+        if self._cache_dirty:
+            self.database = load_dataframe(self.collection, ['name', 'description', 'parameters'], use_cache=False)
+            self._cache_dirty = False
+        
         known_tasks = self.database.to_dict(orient='records') # 读取已知任务列表
         # 调用提示词模板生成查询，调用大模型
         response = query(messages=task_agent_prompt.get_prompts(instruction, known_tasks),
@@ -39,17 +45,17 @@ class TaskAgent:
     #     return json.loads(sample_response), True
 
     def update_task(self, task):
-        # 匹配任务名和目标应用均相同的记录
-        condition = (self.database['name'] == task['name'])  #应去掉匹配条件中的app字段匹配
-        index_to_update = self.database.index[condition]
-
-        if not index_to_update.empty:
-            # 更新匹配记录的描述和参数
-            # Update the 'description' and 'parameters' for the row(s) that match the condition
-            self.database.loc[index_to_update, 'description'] = task['description']
-            self.database.loc[index_to_update, 'parameters'] = task['parameters']
-        else:
-            # 无匹配时日志提示
-            # Handle the case where no matching row is found
-            log("No matching task found to update", "red")
-        save_dataframe(self.collection, self.database)
+        # 使用upsert操作优化
+        from utils.mongo_utils import upsert_one
+        
+        task_doc = {
+            'name': task['name'],
+            'description': task['description'],
+            'parameters': json.dumps(task['parameters'])
+        }
+        
+        # 使用upsert更新或插入
+        upsert_one(self.collection, {'name': task['name']}, task_doc)
+        
+        # 标记缓存为脏
+        self._cache_dirty = True
