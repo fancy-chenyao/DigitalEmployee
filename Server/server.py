@@ -833,19 +833,21 @@ class Server:
 
 # 接收错误消息，包含完整的上下文信息（preXml、action、instruction等）
             elif message_type == 'E':
-                size_line = file_obj.readline().decode().strip()
-                file_size = int(size_line)
+                file_info = b''
+                while not file_info.endswith(b'\n'):
+                    file_info += client_socket.recv(1)
+                file_size_str = file_info.decode().strip()
+                file_size = int(file_size_str)
                 
                 # 读取错误数据
+                error_data = b''
                 bytes_remaining = file_size
-                chunks = []
                 while bytes_remaining > 0:
-                    data = file_obj.read(min(bytes_remaining, self.buffer_size))
-                    if not data:
-                        break
-                    chunks.append(data)
+                    data = client_socket.recv(min(bytes_remaining, self.buffer_size))
+                    error_data += data
                     bytes_remaining -= len(data)
-                error_string = b''.join(chunks).decode().strip()
+                
+                error_string = error_data.decode().strip()
                 log(f"Error message received: {error_string}", "red")
                 
                 # 解析错误信息
@@ -858,6 +860,257 @@ class Server:
                 # 如果有preXml，保存到MongoDB用于调试
                 if error_info.get('pre_xml'):
                     self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
+
+                # 初始化AgentMemory
+                self.agent_memory = AgentMemory(
+                    instruction=error_info.get('instruction', 'None'),
+                    errTYPE=error_info.get('error_type', 'UNKNOWN'),
+                    errMessage=error_info.get('error_message', 'No message'),
+                    curXML=error_info.get('cur_xml', 'None'),
+                    preXML=error_info.get('pre_xml', 'None'),
+                    action=error_info.get('action', 'None')
+                )
+
+                # 调用Reflector进行反思分析
+                reflector = Reflector(self.agent_memory)
+                reflection = reflector.reflect_on_episodic_memory(self.agent_memory)
+                
+                # 根据反思结果决定下一步操作
+                if reflection.need_back:
+                    # 需要回退，直接发送回退指令
+                    back_action = {"name": "back", "parameters": {}}
+                    message = json.dumps(back_action)
+                    try:
+                        client_socket.send(message.encode())
+                        client_socket.send("\r\n".encode())
+                        log("Back action sent to client", "blue")
+                    except ConnectionAbortedError:
+                        log("Client disconnected during back action sending", "yellow")
+                        break
+                else:
+                    # 不需要回退
+                    advice = reflection.advice
+                    if reflection.problem_type == 'area':
+                        # 选择了错误的区域
+                        log(f"Advice for '选择了错误的区域': {advice}", "blue")
+                        
+                        # 获取当前XML数据（从错误信息中提取）
+                        current_xml = error_info.get('cur_xml', '')
+                        if current_xml:
+                            # 解析当前XML以获得所需的格式
+                            try:
+                                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+                                
+                                # 搜索当前页面节点并获取可用子任务
+                                page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+                                available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
+                                if len(new_subtasks) > 0:
+                                    available_subtasks += new_subtasks
+                                
+                                # 调用SelectAgent.select：结合历史和当前界面选择子任务，传入反思建议
+                                response, new_action = mobileGPT.select_agent.select(
+                                    available_subtasks, 
+                                    mobileGPT.subtask_history,
+                                    mobileGPT.qa_history,
+                                    encoded_xml, 
+                                    [advice] if advice else []  # 将反思建议作为suggestions传入，确保格式正确
+                                )
+                                
+                                # 若生成了新动作，添加到内存（供后续复用）
+                                if new_action:
+                                    mobileGPT.memory.add_new_action(new_action, page_index)
+                                
+                                # 提取选择的子任务
+                                next_subtask = response['action']
+                                
+                                # 处理speak动作（与mobilegpt.py保持一致）
+                                if next_subtask['name'] != 'read_screen':
+                                    msg = response['speak']
+                                    speak_action = {"name": "speak", "parameters": {"message": msg}}
+                                    try:
+                                        client_socket.send(json.dumps(speak_action).encode())
+                                        client_socket.send("\r\n".encode())
+                                        log(f"Speak action sent: {msg}", "blue")
+                                    except ConnectionAbortedError:
+                                        log("Client disconnected during speak action sending", "yellow")
+                                        break
+                                
+                                # 更新MobileGPT的子任务状态和历史
+                                if mobileGPT.current_subtask_data:
+                                    mobileGPT.task_path.append(mobileGPT.current_subtask_data)
+                                
+                                mobileGPT.current_subtask_data = {
+                                    "page_index": page_index,
+                                    "subtask_name": next_subtask['name'], 
+                                    "subtask": next_subtask, 
+                                    "actions": []
+                                }
+                                
+                                # 初始化推导智能体
+                                mobileGPT.derive_agent.init_subtask(next_subtask, mobileGPT.subtask_history)
+                                mobileGPT.current_subtask = next_subtask
+                                
+                                # 处理基础子任务（finish, speak, scroll_screen）
+                                if next_subtask['name'] in ['finish', 'speak', 'scroll_screen']:
+                                    primitive_action = mobileGPT._MobileGPT__handle_primitive_subtask(next_subtask)
+                                    if primitive_action:
+                                        try:
+                                            client_socket.send(json.dumps(primitive_action).encode())
+                                            client_socket.send("\r\n".encode())
+                                            log(f"Primitive action sent: {primitive_action['name']}", "blue")
+                                        except ConnectionAbortedError:
+                                            log("Client disconnected during primitive action sending", "yellow")
+                                            break
+                                else:
+                                    # 对于复杂子任务，调用derive_agent生成具体动作
+                                    try:
+                                        next_action, example = mobileGPT.derive_agent.derive(encoded_xml, suggestions=[advice] if advice else [])
+                                        
+                                        # 记录动作数据
+                                        current_action_data = {
+                                            "page_index": page_index, 
+                                            "action": next_action, 
+                                            "screen": encoded_xml,
+                                            "example": example
+                                        }
+                                        mobileGPT.current_subtask_data['actions'].append(current_action_data)
+                                        
+                                        # 发送动作到客户端
+                                        if next_action:
+                                            message = json.dumps(next_action)
+                                            try:
+                                                client_socket.send(message.encode())
+                                                client_socket.send("\r\n".encode())
+                                                log(f"Corrective action sent to client: {next_action['name']}", "blue")
+                                            except ConnectionAbortedError:
+                                                log("Client disconnected during corrective action sending", "yellow")
+                                                break
+                                    except Exception as derive_error:
+                                        log(f"Error in derive_agent: {derive_error}", "red")
+                                        # 发送finish动作作为兜底
+                                        finish_action = {"name": "finish", "parameters": {}}
+                                        try:
+                                            client_socket.send(json.dumps(finish_action).encode())
+                                            client_socket.send("\r\n".encode())
+                                        except ConnectionAbortedError:
+                                            log("Client disconnected during error recovery", "yellow")
+                                            break
+                                        
+                            except Exception as e:
+                                log(f"Error processing corrective action: {e}", "red")
+                                # 发送默认的finish动作
+                                finish_action = {"name": "finish", "parameters": {}}
+                                try:
+                                    client_socket.send(json.dumps(finish_action).encode())
+                                    client_socket.send("\r\n".encode())
+                                except ConnectionAbortedError:
+                                    log("Client disconnected during error recovery", "yellow")
+                                    break
+                        else:
+                            log("No current XML available for corrective action", "red")
+
+                    else:
+                        # 其他的错误默认为指令错误
+                        # 重新使用deriveAgent生成动作，发送到客户端
+                        log("Handling instruction error - regenerating action with derive_agent", "yellow")
+                        
+                        if encoded_xml and mobileGPT.current_subtask:
+                            try:
+                                # 获取当前页面索引
+                                current_xml = error_info.get('cur_xml', '')
+                                if current_xml:
+                                    parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+                                    page_index, _ = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+                                else:
+                                    # 如果没有当前XML，使用当前页面索引
+                                    page_index = mobileGPT.current_page_index
+                                
+                                # 使用derive_agent重新生成动作，传入反思建议
+                                suggestions = [advice] if advice else []
+                                next_action, example = mobileGPT.derive_agent.derive(encoded_xml, suggestions=suggestions)
+                                
+                                # 记录重新生成的动作数据
+                                current_action_data = {
+                                    "page_index": page_index,
+                                    "action": next_action,
+                                    "screen": encoded_xml,
+                                    "example": example,
+                                    "regenerated": True  # 标记为重新生成的动作
+                                }
+                                
+                                if mobileGPT.current_subtask_data:
+                                    mobileGPT.current_subtask_data['actions'].append(current_action_data)
+                                
+                                # 发送重新生成的动作到客户端
+                                if next_action:
+                                    message = json.dumps(next_action)
+                                    try:
+                                        client_socket.send(message.encode())
+                                        client_socket.send("\r\n".encode())
+                                        log(f"Regenerated action sent to client: {next_action['name']}", "green")
+                                    except ConnectionAbortedError:
+                                        log("Client disconnected during regenerated action sending", "yellow")
+                                        break
+                                    except Exception as send_error:
+                                        log(f"Failed to send regenerated action: {send_error}", "red")
+                                        # 尝试发送finish动作作为兜底
+                                        try:
+                                            finish_action = {"name": "finish", "parameters": {}}
+                                            client_socket.send(json.dumps(finish_action).encode())
+                                            client_socket.send("\r\n".encode())
+                                            log("Sent finish action after send error", "yellow")
+                                        except:
+                                            log("Failed to send fallback finish action", "red")
+                                            break
+                                else:
+                                    # 如果derive_agent返回None，发送finish动作
+                                    log("Derive agent returned None, sending finish action", "yellow")
+                                    finish_action = {"name": "finish", "parameters": {}}
+                                    try:
+                                        client_socket.send(json.dumps(finish_action).encode())
+                                        client_socket.send("\r\n".encode())
+                                    except ConnectionAbortedError:
+                                        log("Client disconnected during finish action sending", "yellow")
+                                        break
+                                    except Exception as send_error:
+                                        log(f"Failed to send finish action: {send_error}", "red")
+                                        break
+                                        
+                            except Exception as derive_error:
+                                log(f"Error in derive_agent during instruction error recovery: {derive_error}", "red")
+                                # 发送finish动作作为最终兜底
+                                finish_action = {"name": "finish", "parameters": {}}
+                                try:
+                                    client_socket.send(json.dumps(finish_action).encode())
+                                    client_socket.send("\r\n".encode())
+                                    log("Sent finish action as final fallback", "yellow")
+                                except ConnectionAbortedError:
+                                    log("Client disconnected during final fallback", "yellow")
+                                    break
+                                except Exception as send_error:
+                                    log(f"Failed to send final fallback finish action: {send_error}", "red")
+                                    break
+                        else:
+                            # 缺少必要的上下文信息，无法重新生成动作
+                            log("Missing context (XML or current_subtask) for instruction error recovery", "red")
+                            # 尝试重置当前子任务状态，为后续操作做准备
+                            if hasattr(mobileGPT, 'current_subtask'):
+                                mobileGPT.current_subtask = None
+                            if hasattr(mobileGPT, 'current_subtask_data'):
+                                mobileGPT.current_subtask_data = None
+                            
+                            finish_action = {"name": "finish", "parameters": {}}
+                            try:
+                                client_socket.send(json.dumps(finish_action).encode())
+                                client_socket.send("\r\n".encode())
+                                log("Sent finish action due to missing context", "yellow")
+                            except ConnectionAbortedError:
+                                log("Client disconnected during context error recovery", "yellow")
+                                break
+                            except Exception as send_error:
+                                log(f"Failed to send finish action: {send_error}", "red")
+                                break
+
 
 # 接收获取操作列表请求
             elif message_type == 'G':
