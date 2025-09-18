@@ -258,7 +258,7 @@ class Server:
                 else:
                     # 不需要回退
                     advice = reflection.advice
-                    if reflection.problem_type == 0:
+                    if reflection.problem_type == 'area':
                         # 选择了错误的区域
                         log(f"Advice for '选择了错误的区域': {advice}", "blue")
                         

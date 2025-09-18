@@ -24,7 +24,7 @@ class Reflection:
         """从字典创建Reflection对象"""
         return cls(
             need_back=data.get('need_back', False),
-            problem_type=data.get('problem_type', 0),
+            problem_type=data.get('problem_type', 'back'),
             advice=data.get('advice'),
             summary=data.get('summary', '')
         )

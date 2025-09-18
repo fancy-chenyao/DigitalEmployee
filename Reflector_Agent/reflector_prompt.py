@@ -32,7 +32,7 @@ DEFAULT_REFLECTOR_SYSTEM_PROMPT = f"""你是一个分析Agent任务执行失败�
 
 输出格式：
 - need_back: boolean类型，表示当前界面是否需要回退。
-- problem_type: int类型，表示问题类型，可选值为"选择了错误的区域"（0）、"执行了错误的动作"（1）
+- problem_type: string类型，表示问题类型，可选值为"area"（选择了错误的区域）、"action"（执行了错误的动作）、"back"（需要回退）
 - advice: string | null类型，提供直接建议。
 - summary: string类型，对当前界面执行失败的简要总结。
 
@@ -40,7 +40,7 @@ DEFAULT_REFLECTOR_SYSTEM_PROMPT = f"""你是一个分析Agent任务执行失败�
 
 {{
     "need_back": true,
-    "problem_type": 0,
+    "problem_type": "back",
     "advice": null,
     "summary": "发生了什么的简要总结"
 }}
@@ -49,7 +49,7 @@ DEFAULT_REFLECTOR_SYSTEM_PROMPT = f"""你是一个分析Agent任务执行失败�
 
 {{
     "need_back": false,
-    "problem_type": 0,
+    "problem_type": "area",
     "advice": "使用'你'的形式提供直接建议，专注于当前情况 - 重试时你现在需要做什么",
     "summary": "发生了什么的简要总结"
 }}
@@ -58,16 +58,16 @@ DEFAULT_REFLECTOR_SYSTEM_PROMPT = f"""你是一个分析Agent任务执行失败�
 
 {{
     "need_back": false,
-    "problem_type": 1,
+    "problem_type": "action",
     "advice": "使用'你'的形式提供直接建议，专注于当前情况 - 重试时你现在需要做什么",
     "summary": "发生了什么的简要总结"
 }}
 
 重要提示：
-- 如果need_back为true，将advice设置为null
+- 如果need_back为true，将problem_type设置为"back"，将advice设置为null
 - 如果need_back为false，提供专注于重试时在当前情况下现在要做什么的直接形式建议
-- 如果problem_type为0，，表示问题为“选择了错误的区域”，提供建议时需要关注当前界面的元素，提供新元素选择的建议。
-- 如果problem_type为1，，表示问题为“执行了错误的动作”，提供建议时需要关注当前界面执行的动作，提供新的动作建议。
+- 如果problem_type为"area"，表示问题为“选择了错误的区域”，提供建议时需要关注当前界面的元素，提供新元素选择的建议。
+- 如果problem_type为"action"，表示问题为“执行了错误的动作”，提供建议时需要关注当前界面执行的动作，提供新的动作建议。
 - 建议应该是前瞻性和情境性的，而不是对过去错误的回顾
 - 始终包含Agent性能的简要总结
 - 确保JSON有效且可解析

@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Server
 
 from Reflector_Agent.base import AgentMemory, Reflection
 from Reflector_Agent.reflector_prompt import DEFAULT_REFLECTOR_SYSTEM_PROMPT, DEFAULT_PERSONA_FORMAT_TEMPLATE
-from utils.utils import query
+from utils.utils import query, log
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -36,6 +36,8 @@ class Reflector:
         Raises:
             json.JSONDecodeError: 当LLM返回的JSON格式无效时，会递归重试
         """
+
+        log(f"开始反思", 'red')
 
         # 创建系统提示词，定义反思器的角色和分析规则
         system_prompt_content = DEFAULT_REFLECTOR_SYSTEM_PROMPT
@@ -80,7 +82,7 @@ class Reflector:
         response = query(messages=messages)
 
         # 记录反思结果到日志
-        logger.info(f"REFLECTION {response}")
+        log(f"反思结果: {response}", 'red')
 
         try:
             # 如果response已经是字典类型，直接使用
