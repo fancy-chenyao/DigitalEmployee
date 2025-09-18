@@ -19,6 +19,7 @@ class LeaveTimeActivity : AppCompatActivity() {
     private lateinit var tvEndTimeType: TextView
     private lateinit var btnConfirm: Button
     private lateinit var datePickerContainer: FrameLayout
+    private lateinit var timePickerContainer: FrameLayout
     
     private var startDate: Date = Date()
     private var endDate: Date = Date()
@@ -26,7 +27,9 @@ class LeaveTimeActivity : AppCompatActivity() {
     private var endTimeType = "全天"
     
     private var customDatePicker: CustomDatePickerView? = null
+    private var customTimePicker: CustomTimePickerView? = null
     private var isSelectingStartDate = true
+    private var isSelectingStartTime = true
     
     private val dateFormat = SimpleDateFormat("yyyy年MM月dd日", Locale.getDefault())
     
@@ -46,9 +49,12 @@ class LeaveTimeActivity : AppCompatActivity() {
         tvEndTimeType = findViewById(R.id.tvEndTimeType)
         btnConfirm = findViewById(R.id.btnConfirm)
         datePickerContainer = findViewById(R.id.datePickerContainer)
+        timePickerContainer = findViewById(R.id.timePickerContainer)
         
         // 初始化自定义日期选择器
         initCustomDatePicker()
+        // 初始化自定义时间选择器
+        initCustomTimePicker()
     }
     
     private fun setupClickListeners() {
@@ -69,12 +75,12 @@ class LeaveTimeActivity : AppCompatActivity() {
         
         // 开始时间类型点击
         findViewById<LinearLayout>(R.id.layoutStartTimeType).setOnClickListener {
-            showTimeTypeDialog(true)
+            showCustomTimePicker(true)
         }
         
         // 结束时间类型点击
         findViewById<LinearLayout>(R.id.layoutEndTimeType).setOnClickListener {
-            showTimeTypeDialog(false)
+            showCustomTimePicker(false)
         }
         
         // 确认按钮
@@ -234,5 +240,61 @@ class LeaveTimeActivity : AppCompatActivity() {
         Log.d("LeaveTimeActivity", "触发页面变化检测 - 日期选择器状态: ${customDatePicker?.isShowing()}")
         val intent = Intent("com.example.emplab.TRIGGER_PAGE_CHANGE")
         sendBroadcast(intent)
+    }
+    
+    /**
+     * 初始化自定义时间选择器
+     */
+    private fun initCustomTimePicker() {
+        customTimePicker = CustomTimePickerView(this)
+        timePickerContainer.addView(customTimePicker)
+        
+        // 设置时间选择监听器
+        customTimePicker?.setOnTimeSelectedListener { selectedTimeType ->
+            if (isSelectingStartTime) {
+                startTimeType = selectedTimeType
+            } else {
+                endTimeType = selectedTimeType
+            }
+            updateDisplay()
+        }
+        
+        // 设置取消监听器
+        customTimePicker?.setOnCancelListener {
+            hideCustomTimePicker()
+        }
+    }
+    
+    /**
+     * 显示自定义时间选择器
+     */
+    private fun showCustomTimePicker(isStartTime: Boolean) {
+        isSelectingStartTime = isStartTime
+        
+        // 设置标题
+        val title = if (isStartTime) "选择开始时间" else "选择结束时间"
+        customTimePicker?.setTitle(title)
+        
+        // 设置当前选中的时间类型
+        val currentTimeType = if (isStartTime) startTimeType else endTimeType
+        customTimePicker?.setSelectedTimeType(currentTimeType)
+        
+        // 显示时间选择器
+        customTimePicker?.show()
+        timePickerContainer.visibility = View.VISIBLE
+        
+        Log.d("LeaveTimeActivity", "显示自定义时间选择器 - 等待ViewTreeObserver自动检测")
+        // 不再手动触发，依赖ViewTreeObserver自动检测
+    }
+    
+    /**
+     * 隐藏自定义时间选择器
+     */
+    private fun hideCustomTimePicker() {
+        customTimePicker?.hide()
+        timePickerContainer.visibility = View.GONE
+        
+        Log.d("LeaveTimeActivity", "隐藏自定义时间选择器 - 等待ViewTreeObserver自动检测")
+        // 不再手动触发，依赖ViewTreeObserver自动检测
     }
 }
