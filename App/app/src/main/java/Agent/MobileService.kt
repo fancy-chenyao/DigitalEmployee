@@ -47,7 +47,7 @@ import kotlin.text.substring
  */
 class MobileService : Service() {
     companion object {
-        private const val TAG = "MobileGPT_Service"
+        private const val TAG = "MobileService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "MobileGPTServiceChannel"
     }
@@ -600,6 +600,7 @@ class MobileService : Service() {
     /**
      * 执行点击动作
      */
+
     private fun executeClickAction(activity: Activity, element: GenericElement) {
         // 首先检查目标元素是否可点击
         if (element.clickable && element.enabled) {
@@ -611,49 +612,19 @@ class MobileService : Service() {
                     xmlPending = true
                 } else {
                     Log.e(TAG, "点击动作执行失败")
-                    sendActionError("点击动作执行失败")
+                    sendActionError("直接点击动作执行失败")
                 }
             }
         } else {
-            // 目标元素不可点击，尝试查找最近的可点击节点
-            Log.d(TAG, "目标元素不可点击，尝试查找最近的可点击节点")
-            findNearestClickableNode(activity, element) { clickableElement ->
-                if (clickableElement != null) {
-                    Log.d(TAG, "找到最近的可点击节点: ${clickableElement.resourceId}")
-                    
-                    // 检查是否是可滚动的容器（如ListView、RecyclerView等）
-                    if (isScrollableContainer(clickableElement)) {
-                        // 对于可滚动容器，使用目标元素的坐标进行点击
-                        Log.d(TAG, "检测到可滚动容器，使用目标元素坐标点击")
-                        clickByCoordinateDP(activity, element, clickableElement) { success ->
-                            if (success) {
-                                Log.d(TAG, "使用坐标点击成功")
-                                screenNeedUpdate = true
-                                xmlPending = true
-                            } else {
-                                Log.e(TAG, "使用坐标点击失败")
-                                val remark = buildClickableNodeRemark(element, clickableElement, false)
-                                sendActionError("点击动作执行失败", remark)
-                            }
-                        }
-                    } else {
-                        // 普通元素，直接点击
-                        ElementController.clickElement(activity, clickableElement.resourceId) { success ->
-                            if (success) {
-                                Log.d(TAG, "使用最近可点击节点执行点击成功")
-                                screenNeedUpdate = true
-                                xmlPending = true
-                            } else {
-                                Log.e(TAG, "使用最近可点击节点执行点击失败")
-                                val remark = buildClickableNodeRemark(element, clickableElement, false)
-                                sendActionError("点击动作执行失败", remark)
-                            }
-                        }
-                    }
+            Log.d(TAG, "目标元素不可直接点击，使用目标元素坐标点击")
+            clickByCoordinateDP(activity, element) { success ->
+                if (success) {
+                    Log.d(TAG, "使用坐标点击成功")
+                    screenNeedUpdate = true
+                    xmlPending = true
                 } else {
-                    Log.e(TAG, "未找到可点击的节点")
-                    val remark = buildNoClickableNodeRemark(element)
-                    sendActionError("点击动作执行失败", remark)
+                    Log.e(TAG, "目标元素不可直接点击，同时使用坐标点击失败")
+                    sendActionError("目标元素不可直接点击，同时坐标点击动作执行失败")
                 }
             }
         }
@@ -907,7 +878,7 @@ class MobileService : Service() {
     /**
      * 使用坐标点击目标元素
      */
-    private fun clickByCoordinateDP(activity: Activity, targetElement: GenericElement, containerElement: GenericElement, callback: (Boolean) -> Unit) {
+    private fun clickByCoordinateDP(activity: Activity, targetElement: GenericElement, callback: (Boolean) -> Unit) {
         // 计算目标元素的中心坐标
         val centerX = (targetElement.bounds.left + targetElement.bounds.right)/2f
         val centerY = (targetElement.bounds.top + targetElement.bounds.bottom)/2f
@@ -917,19 +888,7 @@ class MobileService : Service() {
         Log.d(TAG, "使用坐标点击 (dp): ($centerX dp, $centerY dp)")
         
         // 使用NativeController的坐标点击功能
-        when (PageSniffer.getCurrentPageType(activity)) {
-            PageSniffer.PageType.NATIVE -> {
-                NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
-                    callback(success)
-                }
-            }
-            else -> {
-                // 对于其他类型，尝试使用ElementController
-                ElementController.clickElement(activity, containerElement.resourceId) { success ->
-                    callback(success)
-                }
-            }
-        }
+        ElementController.clickByCoordinateDp(activity,centerX.toFloat(),centerY.toFloat(),callback)
     }
 
 
