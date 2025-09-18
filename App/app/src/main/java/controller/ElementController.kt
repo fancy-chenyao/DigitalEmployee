@@ -2,6 +2,7 @@ package controller
 
 import android.app.Activity
 import android.graphics.Rect
+import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -9,7 +10,7 @@ import java.io.File
 import java.io.FileWriter
 
 object ElementController {
-    
+    private const val TAG = "ElementController"
     fun getCurrentElementTree(activity: Activity, callback: (GenericElement) -> Unit) {
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
@@ -53,7 +54,21 @@ object ElementController {
             }
         }
     }
-    
+    fun clickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
+        // 使用NativeController的坐标点击功能
+        when (PageSniffer.getCurrentPageType(activity)) {
+            PageSniffer.PageType.NATIVE -> {
+                NativeController.clickByCoordinateDp(activity, xDp.toFloat(), yDp.toFloat()) { success ->
+                    callback(success)
+                }
+            }
+            else -> {
+                // 对于其他类型，尝试使用ElementController
+                Log.d(TAG,"其他类型页面进行坐标点击")
+            }
+        }
+    }
+
     fun setInputValue(activity: Activity, elementId: String, text: String, callback: (Boolean) -> Unit) {
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
