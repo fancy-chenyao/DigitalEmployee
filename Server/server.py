@@ -10,23 +10,50 @@ from screenParser.Encoder import xmlEncoder
 from mobilegpt import MobileGPT
 from agents.task_agent import TaskAgent
 from datetime import datetime
+from utils.mongo_utils import check_connection, get_connection_info, close_connection
+from env_config import Config
 
 
 class Server:
-    def __init__(self, host='000.000.000.000', port=12345, buffer_size=4096):
-        self.host = host
-        self.port = port
-        self.buffer_size = buffer_size
-        self.memory_directory = './memory'# 核心数据存储目录（日志、截图、XML等）
-        self.enable_db = True  # 可配置：是否启用Mongo写入
+    def __init__(self, host=None, port=None, buffer_size=None):
+        # 使用配置类获取参数
+        config = Config.get_server_config()
+        self.host = host or config['host']
+        self.port = port or config['port']
+        self.buffer_size = buffer_size or config['buffer_size']
+        
+        self.memory_directory = Config.MEMORY_DIRECTORY
+        self.enable_db = Config.ENABLE_DB
         self.db_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
         self._db_worker_thread = threading.Thread(target=self._db_worker, name="db-writer", daemon=True)
+        
+        # 打印配置信息
+        Config.print_config()
+        
+        # 检查MongoDB连接
+        if self.enable_db:
+            if not check_connection():
+                log("MongoDB连接检查失败，尝试重新连接...", "yellow")
+                from utils.mongo_utils import reconnect
+                if not reconnect():
+                    log("MongoDB连接失败，将使用文件系统存储", "red")
+                    self.enable_db = False
+            else:
+                log("MongoDB连接正常", "green")
+                # 打印连接信息
+                conn_info = get_connection_info()
+                if conn_info:
+                    log(f"MongoDB连接池信息: {conn_info}", "blue")
 
         # Create the directory for saving received files if it doesn't exist
         if not os.path.exists(self.memory_directory):
             os.makedirs(self.memory_directory)
         # 启动DB后台写入线程
         self._db_worker_thread.start()
+        
+        # 启动连接监控线程
+        self._monitor_thread = threading.Thread(target=self._connection_monitor, name="connection-monitor", daemon=True)
+        self._monitor_thread.start()
 
     def open(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -420,3 +447,75 @@ class Server:
                             log(f"DB write (shot) failed: {e}", "red")
             except Exception as e:
                 log(f"DB worker loop error: {e}", "red")
+
+    def _connection_monitor(self):
+        """
+        MongoDB连接监控线程
+        定期检查连接健康状态，必要时进行重连
+        """
+        while True:
+            try:
+                if self.enable_db:
+                    if not check_connection():
+                        log("MongoDB连接异常，尝试重连...", "yellow")
+                        from utils.mongo_utils import reconnect
+                        if reconnect():
+                            log("MongoDB重连成功", "green")
+                        else:
+                            log("MongoDB重连失败，切换到文件系统存储", "red")
+                            self.enable_db = False
+                    else:
+                        # 每5分钟打印一次连接状态
+                        conn_info = get_connection_info()
+                        if conn_info:
+                            current_conn = conn_info['connections']['current']
+                            max_conn = conn_info['max_pool_size']
+                            log(f"MongoDB连接状态: {current_conn}/{max_conn} 连接活跃", "blue")
+                
+                # 每30秒检查一次
+                time.sleep(30)
+                
+            except Exception as e:
+                log(f"连接监控异常: {e}", "red")
+                time.sleep(60)  # 出错时等待更长时间
+
+    def get_server_status(self):
+        """
+        获取服务器状态信息
+        """
+        status = {
+            'server': {
+                'host': self.host,
+                'port': self.port,
+                'buffer_size': self.buffer_size,
+                'memory_directory': self.memory_directory,
+                'enable_db': self.enable_db
+            },
+            'database': None,
+            'queue': {
+                'db_queue_size': self.db_queue.qsize(),
+                'db_queue_maxsize': self.db_queue.maxsize
+            }
+        }
+        
+        if self.enable_db:
+            status['database'] = get_connection_info()
+        
+        return status
+
+    def shutdown(self):
+        """
+        优雅关闭服务器
+        """
+        log("正在关闭服务器...", "yellow")
+        
+        # 关闭MongoDB连接
+        if self.enable_db:
+            close_connection()
+            log("MongoDB连接已关闭", "green")
+        
+        # 等待队列处理完成
+        while not self.db_queue.empty():
+            time.sleep(0.1)
+        
+        log("服务器已关闭", "green")
