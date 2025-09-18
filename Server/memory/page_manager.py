@@ -44,18 +44,25 @@ class PageManager:
         save_dataframe(self.available_subtask_db_path, self.available_subtask_db)
 
     def save_subtask(self, subtask_raw: dict, example: dict):
-        filtered_subtask = self.subtask_db[(self.subtask_db['name'] == subtask_raw['name'])]
-        if len(filtered_subtask) == 0:
-            subtask_data = {
-                "name": subtask_raw['name'],
-                "description": subtask_raw['description'],
-                "parameters": json.dumps(subtask_raw['parameters']),
-                "example": json.dumps(example)
-            }
+        # 检查是否已存在
+        if not self.subtask_db.empty and subtask_raw['name'] in self.subtask_db['name'].values:
+            return
+        
+        subtask_data = {
+            "name": subtask_raw['name'],
+            "description": subtask_raw['description'],
+            "parameters": json.dumps(subtask_raw['parameters']),
+            "example": json.dumps(example)
+        }
 
-            self.subtask_db = pd.concat([self.subtask_db, pd.DataFrame([subtask_data])], ignore_index=True)
-            save_dataframe(self.subtask_db_path, self.subtask_db)
-            log("added new subtask to the database")
+        # 使用批量操作优化
+        from utils.mongo_utils import append_one
+        append_one(self.subtask_db_path, subtask_data)
+        
+        # 更新内存中的DataFrame
+        new_row = pd.DataFrame([subtask_data])
+        self.subtask_db = pd.concat([self.subtask_db, new_row], ignore_index=True)
+        log("added new subtask to the database")
 
     def get_next_subtask_data(self, subtask_name: str) -> dict:
         # Filter the subtask_db for rows matching the specific 'name'
@@ -74,11 +81,15 @@ class PageManager:
             "example": json.dumps(example)
         }
 
-        # 写入 MongoDB
-        self.action_db = pd.concat([self.action_db, pd.DataFrame([new_action_db])], ignore_index=True)
-        save_dataframe(self.action_db_path, self.action_db)
+        # 使用批量操作优化
+        from utils.mongo_utils import append_one
+        append_one(self.action_db_path, new_action_db)
 
-        # Append to action data 同步更新内存中的动作列表（添加“traversed”标记，标记为已执行）
+        # 更新内存中的DataFrame
+        new_row = pd.DataFrame([new_action_db])
+        self.action_db = pd.concat([self.action_db, new_row], ignore_index=True)
+
+        # Append to action data 同步更新内存中的动作列表（添加"traversed"标记，标记为已执行）
         new_action_data = {
             "subtask_name": subtask_name,
             'step': step,

@@ -27,6 +27,7 @@ import controller.ElementController
 import controller.GenericElement
 import controller.NativeController
 import controller.PageSniffer
+import controller.UIUtils
 import org.json.JSONException
 import java.io.File
 import java.io.IOException
@@ -103,8 +104,8 @@ class MobileService : Service() {
                 val receivedInstruction = intent.getStringExtra(MobileGPTGlobal.INSTRUCTION_EXTRA)
                 if (receivedInstruction != null) {
                     instruction = receivedInstruction
-                    Log.d(TAG, "receive broadcast")
-                    mExecutorService.execute { 
+                Log.d(TAG, "receive broadcast")
+                mExecutorService.execute { 
 
                         // 记录当前发送的指令
                         currentInstruction = receivedInstruction
@@ -231,9 +232,9 @@ class MobileService : Service() {
         // 初始化页面变化监听
         initPageChangeListener()
 
-
+        
         Log.d(TAG, "MobileService 初始化完成")
-
+        
     }
 
     private fun WaitScreenUpdate(){
@@ -630,7 +631,7 @@ class MobileService : Service() {
                     if (isScrollableContainer(clickableElement)) {
                         // 对于可滚动容器，使用目标元素的坐标进行点击
                         Log.d(TAG, "检测到可滚动容器，使用目标元素坐标点击")
-                        clickByCoordinate(activity, element, clickableElement) { success ->
+                        clickByCoordinateDP(activity, element, clickableElement) { success ->
                             if (success) {
                                 Log.d(TAG, "使用坐标点击成功")
                                 screenNeedUpdate = true
@@ -908,21 +909,23 @@ class MobileService : Service() {
                element.className.contains("ScrollView") ||
                element.className.contains("NestedScrollView")
     }
-    
+
     /**
      * 使用坐标点击目标元素
      */
-    private fun clickByCoordinate(activity: Activity, targetElement: GenericElement, containerElement: GenericElement, callback: (Boolean) -> Unit) {
+    private fun clickByCoordinateDP(activity: Activity, targetElement: GenericElement, containerElement: GenericElement, callback: (Boolean) -> Unit) {
         // 计算目标元素的中心坐标
-        val centerX = (targetElement.bounds.left + targetElement.bounds.right) / 2f
-        val centerY = (targetElement.bounds.top + targetElement.bounds.bottom) / 2f
+        val centerX = (targetElement.bounds.left + targetElement.bounds.right)/2f
+        val centerY = (targetElement.bounds.top + targetElement.bounds.bottom)/2f
+//        val centerX = targetElement.bounds.left
+//        val centerY = targetElement.bounds.top
         
-        Log.d(TAG, "使用坐标点击: ($centerX, $centerY)")
+        Log.d(TAG, "使用坐标点击 (dp): ($centerX dp, $centerY dp)")
         
         // 使用NativeController的坐标点击功能
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
-                NativeController.clickByCoordinate(activity, centerX, centerY) { success ->
+                NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
                     callback(success)
                 }
             }
@@ -1200,7 +1203,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 // 将新截图结果保存到currentScreenShot变量
                 currentScreenShot = bitmap
                 Log.d("MobileService", "截图处理完成，已保存到currentScreenShot")
-            } else {
+        } else {
                 Log.w("MobileService", "截图结果无效")
                 // 回收旧截图并设置为null
                 recycleOldScreenshot()
@@ -1247,9 +1250,9 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 }
             }
             // 发送屏幕信息后，设置以下变量都为false，不响应页面变化，同时不进行屏幕发送
-            screenNeedUpdate = false
+        screenNeedUpdate = false
             xmlPending = false
-            firstScreen = false
+        firstScreen = false
         } catch (e: Exception) {
             Log.e("MobileService", "sendScreen方法执行异常", e)
         }
@@ -1336,8 +1339,8 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             currentScreenShot = null
             
             // 清理其他资源
-            unregisterReceiver(stringReceiver)
-            mClient?.disconnect()
+        unregisterReceiver(stringReceiver)
+        mClient?.disconnect()
             
             // 关闭线程池
             if (::mExecutorService.isInitialized) {
@@ -1348,7 +1351,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         } catch (e: Exception) {
             Log.e(TAG, "销毁服务时发生异常", e)
         } finally {
-            super.onDestroy()
+        super.onDestroy()
         }
     }
 

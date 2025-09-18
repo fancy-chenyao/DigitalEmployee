@@ -10,6 +10,7 @@ from agents.explore_agent import ExploreAgent
 from agents.select_agent import SelectAgent
 from memory.memory_manager import Memory
 from utils.utils import log, parse_completion_rate
+from utils.parallel_ai import parallel_query
 from utils.mongo_utils import load_dataframe, save_dataframe
 
 
