@@ -156,7 +156,7 @@ object NativeController {
         
         // 打印坐标转换信息
         Log.d("clickByCoordinate", "输入坐标 - xDp: $xDp, yDp: $yDp")
-        Log.d("clickByCoordinate", "转换后坐标 - xPx: $xPx, yPx: $yPx")
+        Log.d("clickByCoordinate", "转换后并减去系统栏的坐标 - xPx: $xPx, yPx: $yPx")
         Log.d("clickByCoordinate", "屏幕密度: ${activity.resources.displayMetrics.density}")
         Log.d("clickByCoordinate", "状态栏高度: ${UIUtils.getStatusBarHeight(activity)}px")
         
