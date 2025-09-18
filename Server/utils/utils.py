@@ -7,6 +7,10 @@ from termcolor import colored
 from openai import OpenAI
 from typing import List
 from ast import literal_eval
+import threading
+import time
+import hashlib
+from collections import OrderedDict
 
 
 def log(msg, color='white'):
@@ -45,17 +49,92 @@ def safe_literal_eval(x):
         return np.array([])
 
 
+_EMBED_CACHE_LOCK = threading.RLock()
+_EMBED_CACHE: OrderedDict[str, List[float]] = OrderedDict()
+
+_DIAG_LOCK = threading.RLock()
+_DIAG = {
+    "query_total_calls": 0,
+    "query_cache_hits": 0,
+    "query_cache_misses": 0,
+    "query_total_duration_ms": 0.0,
+    "query_total_retries": 0,
+    "query_calls_with_retry": 0,
+    "query_logging_overhead_ms": 0.0,
+    "embed_total_calls": 0,
+    "embed_cache_hits": 0,
+    "embed_cache_misses": 0,
+}
+
+
+def _diag_update(**kwargs):
+    with _DIAG_LOCK:
+        for k, v in kwargs.items():
+            if k in _DIAG and isinstance(_DIAG[k], (int, float)):
+                _DIAG[k] += v
+
+
+def get_ai_diagnostics(reset: bool = False) -> dict:
+    with _DIAG_LOCK:
+        snapshot = dict(_DIAG)
+        q_total = max(snapshot["query_total_calls"], 1)
+        total_query_cache = snapshot["query_cache_hits"] + snapshot["query_cache_misses"]
+        total_embed_cache = snapshot["embed_cache_hits"] + snapshot["embed_cache_misses"]
+        snapshot.update({
+            "query_avg_duration_ms": snapshot["query_total_duration_ms"] / q_total,
+            "query_avg_retries": snapshot["query_total_retries"] / q_total,
+            "query_hit_rate": (snapshot["query_cache_hits"] / total_query_cache) if total_query_cache > 0 else 0.0,
+            "query_avg_logging_overhead_ms": snapshot["query_logging_overhead_ms"] / q_total,
+            "embed_hit_rate": (snapshot["embed_cache_hits"] / total_embed_cache) if total_embed_cache > 0 else 0.0,
+        })
+        result = dict(snapshot)
+        if reset:
+            for k in _DIAG.keys():
+                _DIAG[k] = 0 if isinstance(_DIAG[k], int) else 0.0
+        return result
+
+
+def _make_cache_key(*parts) -> str:
+    joined = "|".join(str(p) for p in parts)
+    return hashlib.md5(joined.encode("utf-8")).hexdigest()
+
+
+def _embed_cache_get(key: str):
+    with _EMBED_CACHE_LOCK:
+        if key in _EMBED_CACHE:
+            value = _EMBED_CACHE.pop(key)
+            _EMBED_CACHE[key] = value
+            return value
+        return None
+
+
+def _embed_cache_set(key: str, value, max_size: int):
+    with _EMBED_CACHE_LOCK:
+        if key in _EMBED_CACHE:
+            _EMBED_CACHE.pop(key)
+        _EMBED_CACHE[key] = value
+        while len(_EMBED_CACHE) > max_size:
+            _EMBED_CACHE.popitem(last=False)
+
+
 def get_openai_embedding(text: str, model="text-embedding-v1", **kwargs) -> List[float]:
+    max_cache = int(os.getenv("EMBED_CACHE_MAX", "1024"))
+    text_norm = (text or "").replace("\n", " ")
+    cache_key = _make_cache_key("embed", model, text_norm)
+    cached = _embed_cache_get(cache_key)
+    if cached is not None:
+        _diag_update(embed_total_calls=1, embed_cache_hits=1)
+        return cached
+
     client = OpenAI(
         api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    # replace newlines, which can negatively affect performance.
-    text = text.replace("\n", " ")
-
-    response = client.embeddings.create(input=[text], model=model, **kwargs)
-
-    return response.data[0].embedding
+    response = client.embeddings.create(input=[text_norm], model=model, **kwargs)
+    embedding = response.data[0].embedding
+    _embed_cache_set(cache_key, embedding, max_cache)
+    _diag_update(embed_total_calls=1, embed_cache_misses=1)
+    return embedding
 
 
 def cosine_similarity(a, b):
@@ -91,46 +170,124 @@ def generate_numbered_list(data: list) -> str:
     return result_string
 
 
+_QUERY_CACHE_LOCK = threading.RLock()
+_QUERY_CACHE: OrderedDict[str, dict] = OrderedDict()
+
+
+def _query_cache_get(key: str, ttl_seconds: int):
+    now = time.time()
+    with _QUERY_CACHE_LOCK:
+        if key in _QUERY_CACHE:
+            entry = _QUERY_CACHE.pop(key)
+            if now - entry["ts"] <= ttl_seconds:
+                _QUERY_CACHE[key] = entry
+                return entry["val"]
+        return None
+
+
+def _query_cache_set(key: str, value, max_entries: int):
+    with _QUERY_CACHE_LOCK:
+        if key in _QUERY_CACHE:
+            _QUERY_CACHE.pop(key)
+        _QUERY_CACHE[key] = {"val": value, "ts": time.time()}
+        while len(_QUERY_CACHE) > max_entries:
+            _QUERY_CACHE.popitem(last=False)
+
+
 def query(messages, model="qwen3-32b", is_list=False):
+    cache_enabled = os.getenv("AI_CACHE_ENABLED", "true").lower() == "true"
+    cache_ttl = int(os.getenv("AI_CACHE_TTL", "900"))
+    cache_max = int(os.getenv("AI_CACHE_MAX", "512"))
+    max_retries = int(os.getenv("AI_MAX_RETRIES", "3"))
+    base_delay = float(os.getenv("AI_RETRY_BASE_DELAY", "0.8"))
+    log_enabled = os.getenv("AI_QUERY_LOG", "true").lower() == "true"
+
+    try:
+        msg_key = json.dumps(messages, sort_keys=True, ensure_ascii=False)
+    except Exception:
+        msg_key = json.dumps([m.get("content", "") for m in messages], ensure_ascii=False)
+    cache_key = _make_cache_key("chat", model, str(is_list), msg_key)
+
+    t_start = time.time()
+    if cache_enabled:
+        cached = _query_cache_get(cache_key, cache_ttl)
+        if cached is not None:
+            duration_ms = (time.time() - t_start) * 1000.0
+            _diag_update(query_total_calls=1, query_cache_hits=1, query_total_duration_ms=duration_ms)
+            return cached
+
     client = OpenAI(
-    api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
 
-    for message in messages:
-        log("--------------------------")
-        log(message["content"], 'yellow')
-    # log("--------------------------")
-    # log(messages[-1]["content"], 'yellow')
+    log_overhead = 0.0
+    # if log_enabled:
+    #     t_log = time.time()
+    #     for message in messages:
+    #         # 注释掉全量提示词打印以减少I/O开销
+    #         # log("--------------------------")
+    #         # log(message.get("content", ""), 'yellow')
+    #         pass
+    #     log_overhead += (time.time() - t_log)
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0.2,
-        presence_penalty=0.5,
-        seed=1234,
-        extra_body={
-            "enable_thinking": False,
-            "top_k": 10,
-            }
+    attempt = 0
+    last_exception = None
+    while attempt <= max_retries:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.2,
+                presence_penalty=0.5,
+                seed=1234,
+                extra_body={
+                    "enable_thinking": False,
+                    "top_k": 10,
+                }
+            )
+
+            result = response.choices[0].message.content
+            # if log_enabled:
+            #     t_log2 = time.time()
+            #     # 注释掉全量结果打印以减少I/O开销
+            #     # log(result, 'green')
+            #     log_overhead += (time.time() - t_log2)
+            json_formatted_response = __parse_json(result, is_list=is_list)
+            parsed = json.loads(json_formatted_response) if json_formatted_response else result
+
+            if cache_enabled:
+                _query_cache_set(cache_key, parsed, cache_max)
+
+            duration_ms = (time.time() - t_start) * 1000.0
+            _diag_update(
+                query_total_calls=1,
+                query_cache_misses=1 if cache_enabled else 0,
+                query_total_duration_ms=duration_ms,
+                query_total_retries=max(0, attempt),
+                query_calls_with_retry=1 if attempt > 0 else 0,
+                query_logging_overhead_ms=log_overhead * 1000.0,
+            )
+            return parsed
+        except Exception as e:
+            last_exception = e
+            if attempt >= max_retries:
+                break
+            delay = base_delay * (2 ** attempt)
+            time.sleep(delay)
+            attempt += 1
+
+    log(f"LLM call failed after retries: {last_exception}", "red")
+    duration_ms = (time.time() - t_start) * 1000.0
+    _diag_update(
+        query_total_calls=1,
+        query_cache_misses=1 if cache_enabled else 0,
+        query_total_duration_ms=duration_ms,
+        query_total_retries=max(0, attempt),
+        query_calls_with_retry=1 if attempt > 0 else 0,
+        query_logging_overhead_ms=log_overhead * 1000.0,
     )
-
-    # response = client.chat.completions.create(
-    #     model=model,
-    #     messages=messages,
-    #     temperature=0,
-    #     max_tokens=900,
-    #     top_p=0,
-    #     frequency_penalty=0,
-    #     presence_penalty=0
-    # )
-    result = response.choices[0].message.content
-    log(result, 'green')
-    json_formatted_response = __parse_json(result, is_list=is_list)
-    if json_formatted_response:
-        return json.loads(json_formatted_response)
-    else:
-        return result
+    return "{}" if not is_list else "[]"
 
 
 # def query(messages, model="Qwen", is_list=False):

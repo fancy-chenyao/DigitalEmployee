@@ -510,7 +510,7 @@ class Server:
             elif not hasattr(session.mobilegpt, 'memory'):
                 log("等待中: MobileGPT实例没有memory属性", "blue")
             elif session.mobilegpt.memory is None:
-                log("等待中: MobileGPT实例memory属性为None", "blue")
+                pass
             else:
                 log("MobileGPT实例已准备就绪，开始处理XML", "green")
                 self._process_xml_async(session, xml_content)
