@@ -15,6 +15,7 @@ class AgentMemory:
 @dataclass
 class Reflection:
     need_back: bool
+    problem_type: int
     advice: Optional[str]
     summary: str
     
@@ -23,6 +24,7 @@ class Reflection:
         """从字典创建Reflection对象"""
         return cls(
             need_back=data.get('need_back', False),
+            problem_type=data.get('problem_type', 0),
             advice=data.get('advice'),
             summary=data.get('summary', '')
         )

@@ -108,4 +108,4 @@ class Reflector:
             # 如果JSON解析失败，记录错误并递归重试
             logger.error(f"Failed to parse reflection response: {e}")
             logger.error(f"Raw response: {response}")
-            return self.reflect_on_episodic_memory(agent_memory=agent_memory, goal=goal)
+            return self.reflect_on_episodic_memory(agent_memory=agent_memory)
