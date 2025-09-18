@@ -15,9 +15,9 @@ from utils.utils import get_openai_embedding, log, safe_literal_eval, cosine_sim
 from utils.mongo_utils import load_dataframe, save_dataframe
 
 
-def init_database(path: str, headers: list):
+def init_database(path: str, headers: list, use_cache: bool = True):
     # path 参数原先为 CSV 路径，这里改为集合名以保持调用处最小改动
-    return load_dataframe(path, headers)
+    return load_dataframe(path, headers, use_cache=use_cache)
 
 
 class Memory:
@@ -37,16 +37,17 @@ class Memory:
         page_header = ['index', 'available_subtasks', 'trigger_uis', 'extra_uis', "screen"]
         hierarchy_header = ['index', 'screen', 'embedding']
 
-        self.task_db = init_database(self.task_db_path, task_header)
-
-        self.page_db = init_database(self.page_path, page_header)
+        # 使用缓存优化数据库查询
+        self.task_db = init_database(self.task_db_path, task_header, use_cache=True)
+        self.page_db = init_database(self.page_path, page_header, use_cache=True)
         self.page_db.set_index('index', drop=False, inplace=True)
-
-        self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header)
+        self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header, use_cache=True)
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
+        
         self.task_path = self.__get_task_data(self.task_name)
         self.page_managers: Dict[int, PageManager] = {}
         self.page_manager = None
+        self._cache_dirty = False  # 缓存脏标记
 
     def init_page_manager(self, page_index: int):
         if page_index not in self.page_managers:

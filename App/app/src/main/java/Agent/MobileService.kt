@@ -104,8 +104,8 @@ class MobileService : Service() {
                 val receivedInstruction = intent.getStringExtra(MobileGPTGlobal.INSTRUCTION_EXTRA)
                 if (receivedInstruction != null) {
                     instruction = receivedInstruction
-                    Log.d(TAG, "receive broadcast")
-                    mExecutorService.execute { 
+                Log.d(TAG, "receive broadcast")
+                mExecutorService.execute { 
 
                         // 记录当前发送的指令
                         currentInstruction = receivedInstruction
@@ -227,9 +227,9 @@ class MobileService : Service() {
         // 初始化页面变化监听
         initPageChangeListener()
 
-
+        
         Log.d(TAG, "MobileService 初始化完成")
-
+        
     }
 
     private fun WaitScreenUpdate(){
@@ -492,7 +492,9 @@ class MobileService : Service() {
                     executeUIAction(action, args)
 
 
-
+                    // 执行完动作后，修改进行屏幕发送的变量。设置运行失败的Runnable
+                    screenNeedUpdate = true;
+                    xmlPending = true;
                     setActionFailedRunnable("There is no change in the screen. Try other approach.", 10000);
 
                 }
@@ -1195,7 +1197,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 // 将新截图结果保存到currentScreenShot变量
                 currentScreenShot = bitmap
                 Log.d("MobileService", "截图处理完成，已保存到currentScreenShot")
-            } else {
+        } else {
                 Log.w("MobileService", "截图结果无效")
                 // 回收旧截图并设置为null
                 recycleOldScreenshot()
@@ -1242,9 +1244,9 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 }
             }
             // 发送屏幕信息后，设置以下变量都为false，不响应页面变化，同时不进行屏幕发送
-            screenNeedUpdate = false
+        screenNeedUpdate = false
             xmlPending = false
-            firstScreen = false
+        firstScreen = false
         } catch (e: Exception) {
             Log.e("MobileService", "sendScreen方法执行异常", e)
         }
@@ -1331,8 +1333,8 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             currentScreenShot = null
             
             // 清理其他资源
-            unregisterReceiver(stringReceiver)
-            mClient?.disconnect()
+        unregisterReceiver(stringReceiver)
+        mClient?.disconnect()
             
             // 关闭线程池
             if (::mExecutorService.isInitialized) {
@@ -1343,7 +1345,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         } catch (e: Exception) {
             Log.e(TAG, "销毁服务时发生异常", e)
         } finally {
-            super.onDestroy()
+        super.onDestroy()
         }
     }
 
