@@ -452,19 +452,43 @@ class AsyncProcessor:
                 screen_parser.init(log_dir)
 
                 xmls_dir = os.path.join(log_dir, 'xmls')
-                next_index = 0
+                # 与截图 index 对齐：优先使用 screenshots 目录的最大索引
+                index = 0
                 try:
-                    existing = [f for f in os.listdir(xmls_dir) if f.endswith('.xml') and '_' not in f]
-                    nums = []
-                    for f in existing:
+                    screenshots_dir = os.path.join(log_dir, 'screenshots')
+                    shot_files = [f for f in os.listdir(screenshots_dir) if f.endswith('.jpg')]
+                    shot_nums = []
+                    for f in shot_files:
                         try:
-                            nums.append(int(os.path.splitext(f)[0]))
+                            shot_nums.append(int(os.path.splitext(f)[0]))
                         except Exception:
                             pass
-                    next_index = (max(nums) + 1) if nums else 0
+                    if shot_nums:
+                        index = max(shot_nums)
+                    else:
+                        # 回退：基于 xmls 目录已有的原始 xml 来确定索引
+                        existing = [f for f in os.listdir(xmls_dir) if f.endswith('.xml') and '_' not in f]
+                        xml_nums = []
+                        for f in existing:
+                            try:
+                                xml_nums.append(int(os.path.splitext(f)[0]))
+                            except Exception:
+                                pass
+                        index = max(xml_nums) if xml_nums else 0
                 except Exception:
-                    next_index = 0
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, next_index)
+                    index = 0
+
+                # 先保存原始 XML
+                try:
+                    os.makedirs(xmls_dir, exist_ok=True)
+                    raw_path = os.path.join(xmls_dir, f"{index}.xml")
+                    with open(raw_path, 'w', encoding='utf-8') as f:
+                        f.write(xml_content)
+                except Exception:
+                    pass
+
+                # 生成并保存 parsed / hierarchy / encoded / pretty
+                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, index)
             
             log(f"XML异步解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
