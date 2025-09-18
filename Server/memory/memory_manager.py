@@ -10,6 +10,8 @@ from agents import param_fill_agent, subtask_merge_agent
 from memory.page_manager import PageManager
 from memory.node_manager import NodeManager
 from utils import parsing_utils
+from env_config import Config
+from utils.mongo_utils import check_connection
 from utils.action_utils import generalize_action
 from utils.utils import get_openai_embedding, log, safe_literal_eval, cosine_similarity
 from utils.mongo_utils import load_dataframe, save_dataframe
@@ -92,8 +94,16 @@ class Memory:
         self.page_db = pd.concat([self.page_db, pd.DataFrame([new_row])], ignore_index=True)
         save_dataframe(self.page_path, self.page_db)
 
-        # 将屏幕信息保存到MongoDB而不是本地文件系统
-        parsing_utils.save_screen_info_to_mongo(self.task_name, new_index, screen_num)
+        # 根据配置与连通性：优先写入数据库；不可用时不写DB，保留本地文件
+        try:
+            if Config.ENABLE_DB and check_connection():
+                parsing_utils.save_screen_info_to_mongo(self.task_name, new_index, screen_num)
+            else:
+                # DB 关闭或不可达：跳过DB写入，依赖 xmlEncoder 已经写好的本地文件
+                pass
+        except Exception:
+            # 任何异常都不阻断主流程，保底仍保留本地文件
+            pass
 
         return new_index
 
