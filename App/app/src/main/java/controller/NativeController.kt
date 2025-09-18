@@ -6,7 +6,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -20,20 +23,24 @@ object NativeController {
      * 获取页面的元素树
      */
     fun getElementTree(activity: Activity, callback: (GenericElement) -> Unit) {
-        val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+//        val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+        val rootView = activity.findViewById<View>(android.R.id.content)
+//        val rootView = activity.window.decorView as ViewGroup
         var indexCounter = 0
-        val elementTree = parseView(rootView) { indexCounter++ }
+        val elementTree = parseView(rootView, activity) { indexCounter++ }
         callback(elementTree)
     }
     
     /**
      * 解析视图为GenericElement
      * @param view 要解析的视图
+     * @param activity Activity对象，用于px到dp的转换
      * @param getNextIndex 获取下一个唯一索引的函数
+     * @return GenericElement对象，其中bounds坐标为dp单位
      */
-    private fun parseView(view: View, getNextIndex: () -> Int): GenericElement {
+    private fun parseView(view: View, activity: Activity, getNextIndex: () -> Int): GenericElement {
         val location = IntArray(2)
-        view.getLocationOnScreen(location)
+        view.getLocationOnScreen(location) // 获取屏幕坐标（px单位）
         
         // 获取视图文本内容
         val text = when (view) {
@@ -53,12 +60,12 @@ object NativeController {
             else -> false
         }
 
-        // 构建边界矩形
+        // 构建边界矩形（dp单位）
         val bounds = Rect(
-            location[0],
-            location[1],
-            location[0] + view.width,
-            location[1] + view.height
+            UIUtils.pxToDp(activity, location[0].toFloat()).toInt(),                    // 左边界（dp）
+            UIUtils.pxToDp(activity, location[1].toFloat()).toInt(),                    // 上边界（dp）
+            UIUtils.pxToDp(activity, (location[0] + view.width).toFloat()).toInt(),     // 右边界（dp）
+            UIUtils.pxToDp(activity, (location[1] + view.height).toFloat()).toInt()     // 下边界（dp）
         )
 
         // 构建附加属性
@@ -74,7 +81,7 @@ object NativeController {
         
         // 处理子视图
         val children = if (view is ViewGroup && isContainerTraversable(view)) {
-            (0 until view.childCount).map { i -> parseView(view.getChildAt(i), getNextIndex) }
+            (0 until view.childCount).map { i -> parseView(view.getChildAt(i), activity, getNextIndex) }
         } else {
             emptyList()
         }
@@ -130,10 +137,41 @@ object NativeController {
     }
     
     /**
-     * 通过坐标点击元素
+     * 通过坐标点击元素（dp版本）
      * @param activity 当前Activity
-     * @param x 点击的X坐标
-     * @param y 点击的Y坐标
+     * @param xDp 点击的X坐标（dp单位）
+     * @param yDp 点击的Y坐标（dp单位）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    /**
+     * 根据dp坐标点击屏幕位置，并显示发光效果
+     * @param activity Activity对象
+     * @param xDp 点击位置的x坐标（dp）
+     * @param yDp 点击位置的y坐标（dp）
+     * @param callback 点击结果回调
+     */
+    fun clickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
+        val xPx = UIUtils.dpToPx(activity, xDp)
+        val yPx = UIUtils.dpToPx(activity, yDp)-UIUtils.getStatusBarHeight(activity)
+        
+        // 打印坐标转换信息
+        Log.d("clickByCoordinate", "输入坐标 - xDp: $xDp, yDp: $yDp")
+        Log.d("clickByCoordinate", "转换后坐标 - xPx: $xPx, yPx: $yPx")
+        Log.d("clickByCoordinate", "屏幕密度: ${activity.resources.displayMetrics.density}")
+        Log.d("clickByCoordinate", "状态栏高度: ${UIUtils.getStatusBarHeight(activity)}px")
+        
+        // 显示发光效果（现在使用相同的坐标系统）
+        UIUtils.showGlowEffect(activity, xPx, yPx)
+        
+        // 执行点击操作
+        clickByCoordinate(activity, xPx, yPx, callback)
+    }
+    
+    /**
+     * 通过坐标点击元素（px版本）
+     * @param activity 当前Activity
+     * @param x 点击的X坐标（px单位）
+     * @param y 点击的Y坐标（px单位）
      * @param callback 回调函数，返回操作是否成功
      */
     fun clickByCoordinate(activity: Activity, x: Float, y: Float, callback: (Boolean) -> Unit) {
@@ -208,12 +246,38 @@ object NativeController {
     }
     
     /**
-     * 执行拖拽操作
+     * 执行拖拽操作（dp版本）
      * @param activity 当前Activity
-     * @param startX 起始X坐标
-     * @param startY 起始Y坐标
-     * @param endX 结束X坐标
-     * @param endY 结束Y坐标
+     * @param startXDp 起始X坐标（dp单位）
+     * @param startYDp 起始Y坐标（dp单位）
+     * @param endXDp 结束X坐标（dp单位）
+     * @param endYDp 结束Y坐标（dp单位）
+     * @param duration 拖拽持续时间（毫秒）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun dragByCoordinateDp(
+        activity: Activity,
+        startXDp: Float,
+        startYDp: Float,
+        endXDp: Float,
+        endYDp: Float,
+        duration: Long = 500,
+        callback: (Boolean) -> Unit
+    ) {
+        val startXPx = UIUtils.dpToPx(activity, startXDp)
+        val startYPx = UIUtils.dpToPx(activity, startYDp)-UIUtils.getStatusBarHeight(activity)
+        val endXPx = UIUtils.dpToPx(activity, endXDp)
+        val endYPx = UIUtils.dpToPx(activity, endYDp)-UIUtils.getStatusBarHeight(activity)
+        dragByCoordinate(activity, startXPx, startYPx, endXPx, endYPx, duration, callback)
+    }
+    
+    /**
+     * 执行拖拽操作（px版本）
+     * @param activity 当前Activity
+     * @param startX 起始X坐标（px单位）
+     * @param startY 起始Y坐标（px单位）
+     * @param endX 结束X坐标（px单位）
+     * @param endY 结束Y坐标（px单位）
      * @param duration 拖拽持续时间（毫秒）
      * @param callback 回调函数，返回操作是否成功
      */
@@ -274,12 +338,38 @@ object NativeController {
     }
     
     /**
-     * 执行滑动/滚动操作
+     * 执行滑动/滚动操作（dp版本）
      * @param activity 当前Activity
-     * @param startX 起始X坐标
-     * @param startY 起始Y坐标
-     * @param endX 结束X坐标
-     * @param endY 结束Y坐标
+     * @param startXDp 起始X坐标（dp单位）
+     * @param startYDp 起始Y坐标（dp单位）
+     * @param endXDp 结束X坐标（dp单位）
+     * @param endYDp 结束Y坐标（dp单位）
+     * @param duration 滑动持续时间（毫秒）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun scrollByTouchDp(
+        activity: Activity,
+        startXDp: Float,
+        startYDp: Float,
+        endXDp: Float,
+        endYDp: Float,
+        duration: Long = 200,
+        callback: (Boolean) -> Unit
+    ) {
+        val startXPx = UIUtils.dpToPx(activity, startXDp)
+        val startYPx = UIUtils.dpToPx(activity, startYDp)
+        val endXPx = UIUtils.dpToPx(activity, endXDp)
+        val endYPx = UIUtils.dpToPx(activity, endYDp)
+        scrollByTouch(activity, startXPx, startYPx, endXPx, endYPx, duration, callback)
+    }
+    
+    /**
+     * 执行滑动/滚动操作（px版本）
+     * @param activity 当前Activity
+     * @param startX 起始X坐标（px单位）
+     * @param startY 起始Y坐标（px单位）
+     * @param endX 结束X坐标（px单位）
+     * @param endY 结束Y坐标（px单位）
      * @param duration 滑动持续时间（毫秒）
      * @param callback 回调函数，返回操作是否成功
      */
@@ -339,10 +429,32 @@ object NativeController {
     }
     
     /**
-     * 通过坐标激活输入框并输入文本
+     * 通过坐标激活输入框并输入文本（dp版本）
      * @param activity 当前Activity
-     * @param inputX 输入框的X坐标
-     * @param inputY 输入框的Y坐标
+     * @param inputXDp 输入框的X坐标（dp单位）
+     * @param inputYDp 输入框的Y坐标（dp单位）
+     * @param inputContent 要输入的文本内容
+     * @param clearBeforeInput 输入前是否清空现有内容
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun inputTextByCoordinateDp(
+        activity: Activity,
+        inputXDp: Float,
+        inputYDp: Float,
+        inputContent: String,
+        clearBeforeInput: Boolean = true,
+        callback: (Boolean) -> Unit
+    ) {
+        val inputXPx = UIUtils.dpToPx(activity, inputXDp)
+        val inputYPx = UIUtils.dpToPx(activity, inputYDp)-UIUtils.getStatusBarHeight(activity)
+        inputTextByCoordinate(activity, inputXPx, inputYPx, inputContent, clearBeforeInput, callback)
+    }
+    
+    /**
+     * 通过坐标激活输入框并输入文本（px版本）
+     * @param activity 当前Activity
+     * @param inputX 输入框的X坐标（px单位）
+     * @param inputY 输入框的Y坐标（px单位）
      * @param inputContent 要输入的文本内容
      * @param clearBeforeInput 输入前是否清空现有内容
      * @param callback 回调函数，返回操作是否成功
@@ -606,10 +718,30 @@ object NativeController {
     }
     
     /**
-     * 从剪贴板粘贴内容
+     * 从剪贴板粘贴内容（dp版本）
      * @param activity 当前Activity
-     * @param targetCoordinateX 目标坐标X（可选，用于坐标粘贴）
-     * @param targetCoordinateY 目标坐标Y（可选，用于坐标粘贴）
+     * @param targetCoordinateXDp 目标坐标X（dp单位，可选，用于坐标粘贴）
+     * @param targetCoordinateYDp 目标坐标Y（dp单位，可选，用于坐标粘贴）
+     * @param pasteMode 粘贴模式（FOCUS_PASTE, COORDINATE_PASTE）
+     * @param callback 回调函数，返回粘贴的内容和操作是否成功
+     */
+    fun pasteFromClipboardDp(
+        activity: Activity,
+        targetCoordinateXDp: Float? = null,
+        targetCoordinateYDp: Float? = null,
+        pasteMode: String = "FOCUS_PASTE",
+        callback: (String?, Boolean) -> Unit
+    ) {
+        val targetCoordinateXPx = targetCoordinateXDp?.let { UIUtils.dpToPx(activity, it) }
+        val targetCoordinateYPx = targetCoordinateYDp?.let { UIUtils.dpToPx(activity, it) }
+        pasteFromClipboard(activity, targetCoordinateXPx, targetCoordinateYPx, pasteMode, callback)
+    }
+    
+    /**
+     * 从剪贴板粘贴内容（px版本）
+     * @param activity 当前Activity
+     * @param targetCoordinateX 目标坐标X（px单位，可选，用于坐标粘贴）
+     * @param targetCoordinateY 目标坐标Y（px单位，可选，用于坐标粘贴）
      * @param pasteMode 粘贴模式（FOCUS_PASTE, COORDINATE_PASTE）
      * @param callback 回调函数，返回粘贴的内容和操作是否成功
      */

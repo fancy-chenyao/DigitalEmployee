@@ -27,6 +27,7 @@ import controller.ElementController
 import controller.GenericElement
 import controller.NativeController
 import controller.PageSniffer
+import controller.UIUtils
 import org.json.JSONException
 import java.io.File
 import java.io.IOException
@@ -622,7 +623,7 @@ class MobileService : Service() {
                     if (isScrollableContainer(clickableElement)) {
                         // 对于可滚动容器，使用目标元素的坐标进行点击
                         Log.d(TAG, "检测到可滚动容器，使用目标元素坐标点击")
-                        clickByCoordinate(activity, element, clickableElement) { success ->
+                        clickByCoordinateDP(activity, element, clickableElement) { success ->
                             if (success) {
                                 Log.d(TAG, "使用坐标点击成功")
                                 screenNeedUpdate = true
@@ -900,21 +901,23 @@ class MobileService : Service() {
                element.className.contains("ScrollView") ||
                element.className.contains("NestedScrollView")
     }
-    
+
     /**
      * 使用坐标点击目标元素
      */
-    private fun clickByCoordinate(activity: Activity, targetElement: GenericElement, containerElement: GenericElement, callback: (Boolean) -> Unit) {
+    private fun clickByCoordinateDP(activity: Activity, targetElement: GenericElement, containerElement: GenericElement, callback: (Boolean) -> Unit) {
         // 计算目标元素的中心坐标
-        val centerX = (targetElement.bounds.left + targetElement.bounds.right) / 2f
-        val centerY = (targetElement.bounds.top + targetElement.bounds.bottom) / 2f
+        val centerX = (targetElement.bounds.left + targetElement.bounds.right)/2f
+        val centerY = (targetElement.bounds.top + targetElement.bounds.bottom)/2f
+//        val centerX = targetElement.bounds.left
+//        val centerY = targetElement.bounds.top
         
-        Log.d(TAG, "使用坐标点击: ($centerX, $centerY)")
+        Log.d(TAG, "使用坐标点击 (dp): ($centerX dp, $centerY dp)")
         
         // 使用NativeController的坐标点击功能
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
-                NativeController.clickByCoordinate(activity, centerX, centerY) { success ->
+                NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
                     callback(success)
                 }
             }
