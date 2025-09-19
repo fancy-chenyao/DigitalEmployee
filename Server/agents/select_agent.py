@@ -46,7 +46,15 @@ class SelectAgent:
                         "completion_rate": "100%",
                         "speak": "I encountered an error and will finish the task."
                     }
-        
+        # 判断action是否丢失，重新提问修正
+        if 'action' not in response:
+            log(f"Response missing 'action' key. Response: {response}", "red")
+            assistant_message = {"role": "assistant", "content": json.dumps(response)}
+            select_prompts.append(assistant_message)
+            error_message = {"role": "user", "content": "Error: Response missing 'action' key."}
+            select_prompts.append(error_message)
+            response = query(select_prompts, model=os.getenv("SELECT_AGENT_GPT_VERSION"))
+
         # 循环验证响应：若LLM选择的子任务无效（不在可执行列表且未新增），则重新提问修正
         while not self.__check_response_validity(response, available_subtasks):
             # 1. 将之前的无效响应作为“助手消息”加入提示词（让LLM知道自己之前错了）
