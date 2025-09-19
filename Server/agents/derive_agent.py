@@ -29,6 +29,7 @@ class DeriveAgent:
         if suggestions is None:
             suggestions = []
         if action_failed:
+            # 按照匹配删除
             self.action_history.pop()
             derive_prompt = derive_agent_prompt.get_prompts(self.instruction, self.subtask,
                                                             self.subtask_history + self.action_history, screen,

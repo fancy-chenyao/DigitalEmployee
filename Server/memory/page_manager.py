@@ -150,3 +150,21 @@ class PageManager:
 
         self.action_db = pd.DataFrame(actions)
         save_dataframe(self.action_db_path, self.action_db)
+    def delete_subtask(self, subtask_name):
+        """
+        仅根据子任务名称删除数据
+        """
+        # 1. 删除subtask_db中名称匹配的记录
+        # 筛选条件：仅匹配子任务名称
+        subtask_condition = (self.subtask_db['name'] == subtask_name)
+
+        if subtask_condition.any():
+            # 保留不满足条件的记录（即删除名称匹配的记录）
+            self.subtask_db = self.subtask_db[~subtask_condition]
+            # 持久化到CSV
+            save_dataframe(self.subtask_db_path, self.subtask_db)
+            log(f"已删除子任务: {subtask_name} (共 {subtask_condition.sum()} 条记录)", "blue")
+        else:
+            log(f"未找到名称为 {subtask_name} 的子任务", "yellow")
+            return
+

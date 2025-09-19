@@ -95,6 +95,10 @@ class MobileGPT:
         available_subtasks = self.memory.get_available_subtasks(page_index)
         if len(new_subtasks) > 0:
             available_subtasks += new_subtasks
+        # 若子任务选择出错，删除子任务名称相同，清楚当前子任务状态
+        if subtask_failed:
+            self.memory.delete_subtask(self.current_subtask['name'])
+            self.current_subtask = None
 
         # 若当前无子任务，选择下一个子任务
         if self.current_subtask is None:
