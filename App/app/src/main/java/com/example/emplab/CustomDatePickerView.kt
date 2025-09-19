@@ -4,8 +4,10 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -119,28 +121,48 @@ class CustomDatePickerView @JvmOverloads constructor(
 
         // 获取当月第一天是星期几（0=Sunday, 1=Monday, ...）
         val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK) - 1
+        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
 
-        // 添加空白占位
-        for (i in 0 until firstDayOfWeek) {
-            val emptyView = TextView(context)
-            emptyView.layoutParams = GridLayout.LayoutParams().apply {
-                width = 0
-                height = GridLayout.LayoutParams.WRAP_CONTENT
-                columnSpec = GridLayout.spec(i)
-                setMargins(4, 4, 4, 4)
-            }
-            gridLayoutDates.addView(emptyView)
+        // 创建日历网格：6行 x 7列 = 42个位置
+        val totalCells = 42
+        val cells = mutableListOf<TextView>()
+
+        // 初始化所有单元格
+        for (i in 0 until totalCells) {
+            val cell = TextView(context)
+            cell.textSize = 16f
+            cell.gravity = android.view.Gravity.CENTER
+            cell.setPadding(16, 16, 16, 16)
+            cell.isClickable = true
+            cell.isFocusable = true
+            cells.add(cell)
         }
 
-        // 添加日期按钮，明确指定每个按钮的列位置
-        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+        // 填充日期
         for (day in 1..daysInMonth) {
-            val dateButton = createDateButton(day, firstDayOfWeek)
-            gridLayoutDates.addView(dateButton)
+            val cellIndex = firstDayOfWeek + day - 1
+            if (cellIndex < totalCells) {
+                val cell = cells[cellIndex]
+                cell.text = day.toString()
+                cell.setOnClickListener { selectDate(day) }
+                updateDateButtonStyle(cell, day)
+            }
+        }
+
+        // 将所有单元格添加到GridLayout
+        for (cell in cells) {
+            val layoutParams = GridLayout.LayoutParams().apply {
+                width = 0
+                height = GridLayout.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+                setMargins(4, 4, 4, 4)
+            }
+            cell.layoutParams = layoutParams
+            gridLayoutDates.addView(cell)
         }
     }
 
-    private fun createDateButton(day: Int, firstDayOfWeek: Int): TextView {
+    private fun createDateButton(day: Int): TextView {
         val button = TextView(context)
         button.text = day.toString()
         button.textSize = 16f
@@ -149,15 +171,11 @@ class CustomDatePickerView @JvmOverloads constructor(
         button.isClickable = true
         button.isFocusable = true
 
-        // 计算当前日期应该在第几列（0-6，对应周日到周六）
-        // 公式：列位置 = (firstDayOfWeek + day - 1) % 7
-        val columnIndex = (firstDayOfWeek + day - 1) % 7
-
-        // 设置布局参数，明确指定列位置
+        // 设置布局参数，让GridLayout自动排列
         val layoutParams = GridLayout.LayoutParams().apply {
             width = 0
             height = GridLayout.LayoutParams.WRAP_CONTENT
-            columnSpec = GridLayout.spec(columnIndex, 1f)
+            columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
             setMargins(4, 4, 4, 4)
         }
         button.layoutParams = layoutParams
@@ -222,8 +240,13 @@ class CustomDatePickerView @JvmOverloads constructor(
         calendar.set(Calendar.DAY_OF_MONTH, day)
         selectedDate = calendar.time
 
-        // 更新显示
-        updateDisplay()
+        // // 更新显示
+        // updateDisplay()
+        // 自动确认选择的日期并关闭日期选择器
+        selectedDate?.let { date ->
+            onDateSelectedListener?.invoke(date)
+        }
+        hide()
     }
 
     /**
