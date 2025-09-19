@@ -16,6 +16,15 @@ from utils.mongo_utils import check_connection, get_connection_info, close_conne
 from env_config import Config
 from session_manager import SessionManager, ClientSession, resource_lock
 from async_processor import async_processor, message_queue
+import sys
+
+# 添加项目根目录到系统路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from Reflector_Agent.base import AgentMemory
+from Reflector_Agent.reflector import Reflector
 
 
 class Server:
@@ -833,6 +842,7 @@ class Server:
 
 # 接收错误消息，包含完整的上下文信息（preXml、action、instruction等）
             elif message_type == 'E':
+                log("error。。。。。。。。。。。。。。。。。。。。", "red")
                 file_info = b''
                 while not file_info.endswith(b'\n'):
                     file_info += client_socket.recv(1)
@@ -852,10 +862,11 @@ class Server:
                 
                 # 解析错误信息
                 error_info = self._parse_error_message(error_string)
-                log(f"Parsed error - Type: {error_info.get('error_type', 'UNKNOWN')}, "
-                    f"Message: {error_info.get('error_message', 'No message')}, "
-                    f"Action: {error_info.get('action', 'None')}, "
-                    f"Instruction: {error_info.get('instruction', 'None')}", "red")
+                # log(f"Parsed error - Type: {error_info.get('error_type', 'UNKNOWN')}, "
+                #     f"Message: {error_info.get('error_message', 'No message')}, "
+                #     f"Action: {error_info.get('action', 'None')}, "
+                #     f"Instruction: {error_info.get('instruction', 'None')}", "red")
+                log("error", "red")
                 
                 # 如果有preXml，保存到MongoDB用于调试
                 if error_info.get('pre_xml'):
@@ -870,6 +881,8 @@ class Server:
                     preXML=error_info.get('pre_xml', 'None'),
                     action=error_info.get('action', 'None')
                 )
+
+                log(self.agent_memory, "blue")
 
                 # 调用Reflector进行反思分析
                 reflector = Reflector(self.agent_memory)
