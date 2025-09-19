@@ -673,10 +673,8 @@ class Server:
             return
 
         try:
-            
             # 解析错误信息
             error_info = self._parse_error_message(error_content)
-            log("错误信息解析完成", "red")
             
             # 如果有preXml，保存到MongoDB用于调试
             if error_info.get('pre_xml'):
@@ -710,6 +708,7 @@ class Server:
                 advice = reflection.advice
                 if reflection.problem_type == 'area':
                     self._handle_area_error(session, error_info, advice, screen_count)
+                    
                 else:
                     self._handle_instruction_error(session, error_info, advice, screen_count)
                     
