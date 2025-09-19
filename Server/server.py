@@ -706,11 +706,14 @@ class Server:
             else:
                 # 不需要回退，根据问题类型处理
                 advice = reflection.advice
+                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
                 if reflection.problem_type == 'area':
-                    self._handle_area_error(session, error_info, advice, screen_count)
+                    # self._handle_area_error(session, error_info, advice, screen_count)
+                    MobileGPT.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
                     
                 else:
-                    self._handle_instruction_error(session, error_info, advice, screen_count)
+                    # self._handle_instruction_error(session, error_info, advice, screen_count)
+                    MobileGPT.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
                     
         except Exception as e:
             log(f"处理错误消息时发生异常: {e}", "red")
