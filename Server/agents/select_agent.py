@@ -27,7 +27,7 @@ class SelectAgent:
         else:
             # 一些版本的 get_prompts 要求显式提供 suggestions 参数
             select_prompts = select_agent_prompt.get_prompts(self.instruction, available_subtasks, subtask_history,
-                                                             qa_history, screen, suggestions)
+                                                             qa_history, screen, [])
 
         response = query(select_prompts, model=os.getenv("SELECT_AGENT_GPT_VERSION"))
         

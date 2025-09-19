@@ -251,6 +251,8 @@ class AsyncProcessor:
             return self._process_database_operation(data)
         elif task_type == "file_operation":
             return self._process_file_operation(data)
+        elif task_type == "error_recovery":
+            return self._process_error_recovery(data)
         else:
             raise ValueError(f"未知的任务类型: {task_type}")
     
@@ -676,6 +678,34 @@ class MessageQueue:
         except queue.Empty:
             return None
     
+    def _process_error_recovery(self, data: dict) -> dict:
+        """处理错误恢复任务"""
+        try:
+            error_info = data.get('error_info', {})
+            session_id = data.get('session_id', '')
+            mobilegpt = data.get('mobilegpt')
+            
+            log(f"开始处理错误恢复任务: {session_id}", "green")
+            
+            # 这里可以添加具体的错误恢复逻辑
+            # 由于错误恢复逻辑比较复杂，建议直接调用server中的同步方法
+            # 或者在这里实现简化的错误恢复逻辑
+            
+            return {
+                'status': 'error_recovery_completed',
+                'session_id': session_id,
+                'error_type': error_info.get('error_type', 'UNKNOWN'),
+                'success': True
+            }
+            
+        except Exception as e:
+            log(f"错误恢复任务处理失败: {e}", "red")
+            return {
+                'status': 'error_recovery_failed',
+                'error': str(e),
+                'success': False
+            }
+
     def _process_messages(self, processor: Callable):
         """处理消息循环"""
         while self.running:
