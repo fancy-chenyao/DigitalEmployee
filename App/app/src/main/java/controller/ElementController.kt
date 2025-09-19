@@ -54,6 +54,35 @@ object ElementController {
             }
         }
     }
+
+    /**
+     * 使用GenericElement中的view引用直接进行点击操作
+     * @param element 包含view引用的GenericElement对象
+     * @param callback 点击操作的回调函数
+     */
+    fun clickElementByView(element: GenericElement, callback: (Boolean) -> Unit) {
+        try {
+            val view = element.view
+            if (view != null && view.isClickable && view.isEnabled) {
+                // 在主线程中执行点击操作
+                view.post {
+                    try {
+                        val success = view.performClick()
+                        callback(success)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "点击操作失败: ${e.message}")
+                        callback(false)
+                    }
+                }
+            } else {
+                Log.w(TAG, "View不可点击或不可用: clickable=${view?.isClickable}, enabled=${view?.isEnabled}")
+                callback(false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "点击元素时发生异常: ${e.message}")
+            callback(false)
+        }
+    }
     fun clickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
         // 使用NativeController的坐标点击功能
         when (PageSniffer.getCurrentPageType(activity)) {
@@ -175,7 +204,8 @@ object ElementController {
             index = 0,
             naf = false,
             additionalProps = emptyMap(),
-            children = emptyList()
+            children = emptyList(),
+            view = null  // Error元素没有对应的View
         )
     }
     
@@ -224,9 +254,11 @@ object ElementController {
                         "clickable" to element.clickable.toString(),
                         "focusable" to element.focusable.toString()
                     ),
-                    children = emptyList()
+                    children = emptyList(),
+                    view = null  // AccessibilityController生成的元素没有直接的View引用
                 )
-            }
+            },
+            view = null  // ElementTree根元素没有直接的View引用
         )
     }
 }

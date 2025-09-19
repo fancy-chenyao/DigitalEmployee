@@ -27,7 +27,7 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
      */
     @Throws(IOException::class)
     fun connect() {
-        Log.d("MobileGPTclient","开始连接 socket")
+        Log.d("MobileGPTclient","开始连接 socket ${serverAddress}:${serverPort}")
         socket = Socket(serverAddress, serverPort)
         dos = DataOutputStream(socket!!.getOutputStream())
     }

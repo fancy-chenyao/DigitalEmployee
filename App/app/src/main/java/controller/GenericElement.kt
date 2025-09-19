@@ -1,6 +1,7 @@
 package controller
 
 import android.graphics.Rect
+import android.view.View
 
 data class GenericElement(
     val resourceId: String,  // 对应 "resource-id"
@@ -19,7 +20,8 @@ data class GenericElement(
     val index: Int = 0,      // 对应 "index"
     val naf: Boolean = false, // 对应 "NAF"
     val additionalProps: Map<String, String>,
-    val children: List<GenericElement>
+    val children: List<GenericElement>,
+    val view: View? = null   // 直接引用对应的View对象，仅在Native页面中有效
 ) {
     override fun toString(): String {
         return "GenericElement(resourceId='$resourceId', className='$className', text='$text', contentDesc='$contentDesc', " +

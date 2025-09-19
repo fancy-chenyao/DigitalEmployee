@@ -70,14 +70,14 @@ object NativeController {
 
         // 构建附加属性
         val additionalProps = mutableMapOf<String, String>()
-//        if (view.id != View.NO_ID) {
-//            try {
-//                val resourceName = view.resources.getResourceEntryName(view.id)
-//                additionalProps["resourceName"] = resourceName
-//            } catch (e: Exception) {
-//                // 忽略资源找不到的异常
-//            }
-//        }
+        if (view.id != View.NO_ID) {
+            try {
+                val resourceName = view.resources.getResourceEntryName(view.id)
+                additionalProps["resourceName"] = resourceName
+            } catch (e: Exception) {
+                // 忽略资源找不到的异常
+            }
+        }
         
         // 处理子视图
         val children = if (view is ViewGroup && isContainerTraversable(view)) {
@@ -87,15 +87,16 @@ object NativeController {
         }
 
         return GenericElement(
-            resourceId = if (view.id != View.NO_ID) {
-                try {
-                    view.resources.getResourceEntryName(view.id)
-                } catch (e: Exception) {
-                    "view_${view.hashCode()}"
-                }
-            } else {
-                "view_${view.hashCode()}"
-            },
+//            resourceId = if (view.id != View.NO_ID) {
+//                try {
+//                    view.resources.getResourceEntryName(view.id)
+//                } catch (e: Exception) {
+//                    "view_${view.hashCode()}"
+//                }
+//            } else {
+//                "view_${view.hashCode()}"
+//            },
+            resourceId = "view_${view.hashCode()}",
             className = view.javaClass.name,
             text = text,
             contentDesc = contentDesc,
@@ -117,7 +118,8 @@ object NativeController {
             index = getNextIndex(),
             naf = false, // 默认为false，可根据需要调整
             additionalProps = additionalProps,
-            children = children
+            children = children,
+            view = view  // 添加view引用，用于直接操作
         )
     }
     

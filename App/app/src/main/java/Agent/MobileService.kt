@@ -623,19 +623,69 @@ class MobileService : Service() {
 
     /**
      * 执行点击动作
+     * 优先使用GenericElement中的view引用进行直接点击，提高点击成功率和性能
      */
-
     private fun executeClickAction(activity: Activity, element: GenericElement) {
+        // 首先检查目标元素是否可点击
+        if (element.clickable && element.enabled) {
+            // 优先使用view引用进行直接点击
+            if (element.view != null) {
+            Log.d(TAG, "使用view引用进行直接点击")
+            ElementController.clickElementByView(element) { success ->
+                if (success) {
+                    Log.d(TAG, "通过view引用点击成功")
+                    screenNeedUpdate = true
+                    xmlPending = true
+                } else {
+                    Log.w(TAG, "通过view引用点击失败，回退到传统方式")
+                    // 回退到传统的点击方式
+                    fallbackClickAction(activity, element)
+                    }
+                }
+            } else {
+                Log.d(TAG, "元素没有view引用，使用传统直接点击方式")
+                // 没有view引用时使用传统方式
+                // 目标元素可点击，直接执行
+                ElementController.clickElement(activity, element.resourceId) { success ->
+                    if (success) {
+                        Log.d(TAG, "传统点击动作执行成功")
+                        screenNeedUpdate = true
+                        xmlPending = true
+                    } else {
+                        Log.e(TAG, "传统点击动作执行失败")
+                        sendActionError("直接点击动作执行失败")
+                    }
+                }
+            }
+        } else {
+            Log.d(TAG, "目标元素不可直接点击，使用目标元素坐标点击")
+            clickByCoordinateDP(activity, element) { success ->
+                if (success) {
+                    Log.d(TAG, "使用坐标点击成功")
+                    screenNeedUpdate = true
+                    xmlPending = true
+                } else {
+                    Log.e(TAG, "目标元素不可直接点击，同时使用坐标点击失败")
+                    sendActionError("目标元素不可直接点击，同时坐标点击动作执行失败")
+                }
+            }
+        }
+    }
+
+    /**
+     * 传统的点击操作回退方法
+     */
+    private fun fallbackClickAction(activity: Activity, element: GenericElement) {
         // 首先检查目标元素是否可点击
         if (element.clickable && element.enabled) {
             // 目标元素可点击，直接执行
             ElementController.clickElement(activity, element.resourceId) { success ->
                 if (success) {
-                    Log.d(TAG, "点击动作执行成功")
+                    Log.d(TAG, "传统点击动作执行成功")
                     screenNeedUpdate = true
                     xmlPending = true
                 } else {
-                    Log.e(TAG, "点击动作执行失败")
+                    Log.e(TAG, "传统点击动作执行失败")
                     sendActionError("直接点击动作执行失败")
                 }
             }
