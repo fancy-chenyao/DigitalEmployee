@@ -16,6 +16,15 @@ from utils.mongo_utils import check_connection, get_connection_info, close_conne
 from env_config import Config
 from session_manager import SessionManager, ClientSession, resource_lock
 from async_processor import async_processor, message_queue
+import sys
+
+# 添加项目根目录到系统路径
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from Reflector_Agent.base import AgentMemory
+from Reflector_Agent.reflector import Reflector
 
 
 class Server:
@@ -648,6 +657,267 @@ class Server:
         """处理错误消息"""
         error_content = message.get('error', '')
         log(f"收到错误消息: {error_content}", "red")
+
+        # 获取必要的变量
+        client_socket = session.client_socket
+        mobileGPT = getattr(session, 'mobilegpt', None)
+        screen_count = getattr(session, 'screen_count', 0)
+        
+        # 检查必要的依赖
+        if not client_socket:
+            log("客户端socket不存在，无法处理错误消息", "red")
+            return
+            
+        if not mobileGPT:
+            log("MobileGPT实例不存在，无法处理错误消息", "red")
+            return
+
+        try:
+            
+            # 解析错误信息
+            error_info = self._parse_error_message(error_content)
+            log("错误信息解析完成", "red")
+            
+            # 如果有preXml，保存到MongoDB用于调试
+            if error_info.get('pre_xml'):
+                self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
+
+            # 初始化AgentMemory
+            self.agent_memory = AgentMemory(
+                instruction=error_info.get('instruction', 'None'),
+                errTYPE=error_info.get('error_type', 'UNKNOWN'),
+                errMessage=error_info.get('error_message', 'No message'),
+                curXML=error_info.get('cur_xml', 'None'),
+                preXML=error_info.get('pre_xml', 'None'),
+                action=error_info.get('action', 'None')
+            )
+            log("---------------------")
+            log(f"错误信息: {error_info}", "red")
+            log("---------------------------")
+
+            log(self.agent_memory, "blue")
+
+            # 调用Reflector进行反思分析
+            reflector = Reflector(self.agent_memory)
+            reflection = reflector.reflect_on_episodic_memory(self.agent_memory)
+            
+            # 根据反思结果决定下一步操作
+            if reflection.need_back:
+                # 需要回退，直接发送回退指令
+                self._send_back_action(client_socket)
+            else:
+                # 不需要回退，根据问题类型处理
+                advice = reflection.advice
+                if reflection.problem_type == 'area':
+                    self._handle_area_error(session, error_info, advice, screen_count)
+                else:
+                    self._handle_instruction_error(session, error_info, advice, screen_count)
+                    
+        except Exception as e:
+            log(f"处理错误消息时发生异常: {e}", "red")
+            # 发送默认的finish动作作为兜底
+            self._send_finish_action(client_socket, "处理错误消息时发生异常")
+
+    def _send_back_action(self, client_socket):
+        """发送回退动作"""
+        back_action = {"name": "back", "parameters": {}}
+        message = json.dumps(back_action)
+        try:
+            client_socket.send(message.encode())
+            client_socket.send("\r\n".encode())
+            log("Back action sent to client", "blue")
+        except Exception as e:
+            log(f"发送回退动作失败: {e}", "red")
+
+    def _send_finish_action(self, client_socket, reason=""):
+        """发送完成动作"""
+        finish_action = {"name": "finish", "parameters": {}}
+        try:
+            client_socket.send(json.dumps(finish_action).encode())
+            client_socket.send("\r\n".encode())
+            log(f"Finish action sent: {reason}", "yellow")
+        except Exception as e:
+            log(f"发送完成动作失败: {e}", "red")
+
+    def _handle_area_error(self, session: ClientSession, error_info: dict, advice: str, screen_count: int):
+        """处理区域选择错误"""
+        client_socket = session.client_socket
+        mobileGPT = session.mobilegpt
+        
+        log(f"处理区域选择错误，建议: {advice}", "blue")
+        
+        # 获取当前XML数据（从错误信息中提取）
+        current_xml = error_info.get('cur_xml', '')
+        if not current_xml:
+            log("没有当前XML数据，无法处理区域错误", "red")
+            self._send_finish_action(client_socket, "缺少XML数据")
+            return
+            
+        try:
+            # 导入screen_parser
+            from screenParser.Encoder import xmlEncoder
+            screen_parser = xmlEncoder()
+            
+            # 解析当前XML以获得所需的格式
+            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+            
+            # 搜索当前页面节点并获取可用子任务
+            page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+            available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
+            if len(new_subtasks) > 0:
+                available_subtasks += new_subtasks
+            
+            # 调用SelectAgent.select：结合历史和当前界面选择子任务，传入反思建议
+            response, new_action = mobileGPT.select_agent.select(
+                available_subtasks, 
+                mobileGPT.subtask_history,
+                mobileGPT.qa_history,
+                encoded_xml, 
+                [advice] if advice else []
+            )
+            
+            # 若生成了新动作，添加到内存（供后续复用）
+            if new_action:
+                mobileGPT.memory.add_new_action(new_action, page_index)
+            
+            # 提取选择的子任务
+            next_subtask = response['action']
+            
+            # 处理speak动作
+            if next_subtask['name'] != 'read_screen':
+                msg = response['speak']
+                speak_action = {"name": "speak", "parameters": {"message": msg}}
+                try:
+                    client_socket.send(json.dumps(speak_action).encode())
+                    client_socket.send("\r\n".encode())
+                    log(f"Speak action sent: {msg}", "blue")
+                except Exception as e:
+                    log(f"发送speak动作失败: {e}", "red")
+                    return
+            
+            # 更新MobileGPT的子任务状态和历史
+            if mobileGPT.current_subtask_data:
+                mobileGPT.task_path.append(mobileGPT.current_subtask_data)
+            
+            mobileGPT.current_subtask_data = {
+                "page_index": page_index,
+                "subtask_name": next_subtask['name'], 
+                "subtask": next_subtask, 
+                "actions": []
+            }
+            
+            # 初始化推导智能体
+            mobileGPT.derive_agent.init_subtask(next_subtask, mobileGPT.subtask_history)
+            mobileGPT.current_subtask = next_subtask
+            
+            # 处理基础子任务（finish, speak, scroll_screen）
+            if next_subtask['name'] in ['finish', 'speak', 'scroll_screen']:
+                primitive_action = mobileGPT._MobileGPT__handle_primitive_subtask(next_subtask)
+                if primitive_action:
+                    try:
+                        client_socket.send(json.dumps(primitive_action).encode())
+                        client_socket.send("\r\n".encode())
+                        log(f"Primitive action sent: {primitive_action['name']}", "blue")
+                    except Exception as e:
+                        log(f"发送基础动作失败: {e}", "red")
+            else:
+                # 对于复杂子任务，调用derive_agent生成具体动作
+                try:
+                    next_action, example = mobileGPT.derive_agent.derive(encoded_xml, suggestions=[advice] if advice else [])
+                    
+                    # 记录动作数据
+                    current_action_data = {
+                        "page_index": page_index, 
+                        "action": next_action, 
+                        "screen": encoded_xml,
+                        "example": example
+                    }
+                    mobileGPT.current_subtask_data['actions'].append(current_action_data)
+                    
+                    # 发送动作到客户端
+                    if next_action:
+                        message = json.dumps(next_action)
+                        try:
+                            client_socket.send(message.encode())
+                            client_socket.send("\r\n".encode())
+                            log(f"Corrective action sent to client: {next_action['name']}", "blue")
+                        except Exception as e:
+                            log(f"发送纠正动作失败: {e}", "red")
+                    else:
+                        self._send_finish_action(client_socket, "derive_agent返回空动作")
+                        
+                except Exception as derive_error:
+                    log(f"derive_agent处理失败: {derive_error}", "red")
+                    self._send_finish_action(client_socket, "derive_agent处理失败")
+                    
+        except Exception as e:
+            log(f"处理区域错误时发生异常: {e}", "red")
+            self._send_finish_action(client_socket, "处理区域错误时发生异常")
+
+    def _handle_instruction_error(self, session: ClientSession, error_info: dict, advice: str, screen_count: int):
+        """处理指令错误"""
+        client_socket = session.client_socket
+        mobileGPT = session.mobilegpt
+        
+        log("处理指令错误 - 使用derive_agent重新生成动作", "yellow")
+        
+        # 获取当前XML数据
+        current_xml = error_info.get('cur_xml', '')
+        if not current_xml:
+            log("缺少XML数据，无法重新生成动作", "red")
+            self._send_finish_action(client_socket, "缺少XML数据")
+            return
+            
+        if not mobileGPT.current_subtask:
+            log("缺少当前子任务，无法重新生成动作", "red")
+            self._send_finish_action(client_socket, "缺少当前子任务")
+            return
+            
+        try:
+            # 导入screen_parser
+            from screenParser.Encoder import xmlEncoder
+            screen_parser = xmlEncoder()
+            
+            # 解析XML
+            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+            page_index, _ = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+            
+            # 使用derive_agent重新生成动作，传入反思建议
+            suggestions = [advice] if advice else []
+            next_action, example = mobileGPT.derive_agent.derive(encoded_xml, suggestions=suggestions)
+            
+            # 记录重新生成的动作数据
+            current_action_data = {
+                "page_index": page_index,
+                "action": next_action,
+                "screen": encoded_xml,
+                "example": example,
+                "regenerated": True
+            }
+            
+            if mobileGPT.current_subtask_data:
+                mobileGPT.current_subtask_data['actions'].append(current_action_data)
+            
+            # 发送重新生成的动作到客户端
+            if next_action:
+                message = json.dumps(next_action)
+                try:
+                    client_socket.send(message.encode())
+                    client_socket.send("\r\n".encode())
+                    log(f"Regenerated action sent to client: {next_action['name']}", "green")
+                except Exception as send_error:
+                    log(f"发送重新生成的动作失败: {send_error}", "red")
+                    self._send_finish_action(client_socket, "发送动作失败")
+            else:
+                log("derive_agent返回空动作，发送finish动作", "yellow")
+                self._send_finish_action(client_socket, "derive_agent返回空动作")
+                
+        except Exception as derive_error:
+            log(f"指令错误恢复过程中发生异常: {derive_error}", "red")
+            self._send_finish_action(client_socket, "指令错误恢复失败")
+
+
+        
         
         # 可以在这里添加错误处理逻辑
         # 目前只是记录日志
@@ -833,6 +1103,7 @@ class Server:
 
 # 接收错误消息，包含完整的上下文信息（preXml、action、instruction等）
             elif message_type == 'E':
+                log("error。。。。。。。。。。。。。。。。。。。。", "red")
                 file_info = b''
                 while not file_info.endswith(b'\n'):
                     file_info += client_socket.recv(1)
@@ -852,10 +1123,11 @@ class Server:
                 
                 # 解析错误信息
                 error_info = self._parse_error_message(error_string)
-                log(f"Parsed error - Type: {error_info.get('error_type', 'UNKNOWN')}, "
-                    f"Message: {error_info.get('error_message', 'No message')}, "
-                    f"Action: {error_info.get('action', 'None')}, "
-                    f"Instruction: {error_info.get('instruction', 'None')}", "red")
+                # log(f"Parsed error - Type: {error_info.get('error_type', 'UNKNOWN')}, "
+                #     f"Message: {error_info.get('error_message', 'No message')}, "
+                #     f"Action: {error_info.get('action', 'None')}, "
+                #     f"Instruction: {error_info.get('instruction', 'None')}", "red")
+                log("error", "red")
                 
                 # 如果有preXml，保存到MongoDB用于调试
                 if error_info.get('pre_xml'):
@@ -870,6 +1142,8 @@ class Server:
                     preXML=error_info.get('pre_xml', 'None'),
                     action=error_info.get('action', 'None')
                 )
+
+                log(self.agent_memory, "blue")
 
                 # 调用Reflector进行反思分析
                 reflector = Reflector(self.agent_memory)
@@ -1185,27 +1459,48 @@ class Server:
         error_info = {}
         lines = error_string.split('\n')
         
-        for line in lines:
-            line = line.strip()
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
             if line.startswith('ERROR_TYPE:'):
-                error_info['error_type'] = line[11:]
+                error_info['error_type'] = line[11:].strip()
             elif line.startswith('ERROR_MESSAGE:'):
-                error_info['error_message'] = line[14:]
+                error_info['error_message'] = line[14:].strip()
             elif line.startswith('ACTION:'):
-                error_info['action'] = line[7:]
+                error_info['action'] = line[7:].strip()
             elif line.startswith('INSTRUCTION:'):
-                error_info['instruction'] = line[12:]
+                error_info['instruction'] = line[12:].strip()
             elif line.startswith('REMARK:'):
-                error_info['remark'] = line[7:]
+                error_info['remark'] = line[7:].strip()
             elif line == 'PRE_XML:':
-                # 找到PRE_XML标记，收集后续所有行作为XML内容
+                # 找到PRE_XML标记，收集后续XML内容直到下一个标记
                 xml_lines = []
-                for xml_line in lines[lines.index(line) + 1:]:
-                    if xml_line.startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                i += 1
+                while i < len(lines):
+                    xml_line = lines[i]
+                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:'] or \
+                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                        i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
+                    i += 1
                 if xml_lines:
-                    error_info['pre_xml'] = '\n'.join(xml_lines)
+                    error_info['pre_xml'] = '\n'.join(xml_lines).strip()
+            elif line == 'CUR_XML:':
+                # 找到CUR_XML标记，收集后续XML内容直到下一个标记
+                xml_lines = []
+                i += 1
+                while i < len(lines):
+                    xml_line = lines[i]
+                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:'] or \
+                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                        i -= 1  # 回退一行，让外层循环处理
+                        break
+                    xml_lines.append(xml_line)
+                    i += 1
+                if xml_lines:
+                    error_info['cur_xml'] = '\n'.join(xml_lines).strip()
+            i += 1
         
         return error_info
 
