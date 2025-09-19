@@ -18,8 +18,6 @@ class SelectAgent:
         # 子任务历史（避免重复选择已完成的子任务）
         # 问答历史（补充用户提供的参数信息，如消息内容）
         # 界面XML（LLM可分析界面元素，判断子任务可行性）
-        # 建议
-        # 归一化 suggestions，避免下游 len(None) 报错
         if suggestions is None:
             suggestions = []
 

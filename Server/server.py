@@ -494,7 +494,7 @@ class Server:
             # 回退到同步处理，确保功能稳定性
             self._process_xml_directly(session, xml_content)
 
-    def _wait_for_mobilegpt(self, session: ClientSession, xml_content: str, max_wait: int = 10):
+    def _wait_for_mobilegpt(self, session: ClientSession, xml_content: str, max_wait: int = 15):
         """等待MobileGPT实例准备就绪"""
         import time
         
