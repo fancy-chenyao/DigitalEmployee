@@ -209,9 +209,18 @@ class MobileService : Service() {
             override fun run() {
                 Log.d(TAG, "screen update waited")
                 mainThreadHandler.removeCallbacks(screenUpdateTimeoutRunnable!!)
-                // 使用回调确保saveCurrScreen完成后再调用sendScreen
+                // 使用回调确保saveCurrScreen完成后再进行XML比较
                 saveCurrScreen {
-                    sendScreen()
+                    // 比较当前XML和上一个XML是否相同
+                    if (isXmlContentSame()) {
+                        // XML内容相同，发送错误信息
+                        Log.d(TAG, "XML内容相同，发送操作错误信息")
+                        sendXmlUnchangedError()
+                    } else {
+                        // XML内容不同，正常发送屏幕数据
+                        Log.d(TAG, "XML内容不同，发送屏幕数据")
+                        sendScreen()
+                    }
                 }
             }
         }
@@ -220,9 +229,18 @@ class MobileService : Service() {
             override fun run() {
                 Log.d(TAG, "screen update timeout")
                 mainThreadHandler.removeCallbacks(screenUpdateWaitRunnable!!)
-                // 使用回调确保saveCurrScreen完成后再调用sendScreen
+                // 使用回调确保saveCurrScreen完成后再进行XML比较
                 saveCurrScreen {
-                    sendScreen()
+                    // 比较当前XML和上一个XML是否相同
+                    if (isXmlContentSame()) {
+                        // XML内容相同，发送错误信息
+                        Log.d(TAG, "XML内容相同，发送操作错误信息")
+                        sendXmlUnchangedError()
+                    } else {
+                        // XML内容不同，正常发送屏幕数据
+                        Log.d(TAG, "XML内容不同，发送屏幕数据")
+                        sendScreen()
+                    }
                 }
             }
         }
@@ -1174,6 +1192,65 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             recycleOldScreenshot()
             currentScreenShot = null
         }
+    }
+
+    /**
+     * 比较当前XML和上一个XML内容是否相同
+     * 先删除resource-id属性，然后比较内容是否有变化
+     * @return true如果XML内容相同，false如果不同
+     */
+    private fun isXmlContentSame(): Boolean {
+        // 如果是第一次屏幕或者没有上一个XML，认为不同
+        if (firstScreen || previousScreenXML.isEmpty()) {
+            Log.d(TAG, "第一次屏幕或没有上一个XML，认为XML不同")
+            return false
+        }
+        
+        // 删除resource-id属性后比较XML内容
+        val currentXmlWithoutResourceId = removeResourceIdFromXml(currentScreenXML)
+        val previousXmlWithoutResourceId = removeResourceIdFromXml(previousScreenXML)
+        
+        val isSame = currentXmlWithoutResourceId == previousXmlWithoutResourceId
+        Log.d(TAG, "XML比较结果(删除resource-id后): $isSame, 当前XML长度: ${currentXmlWithoutResourceId.length}, 上一个XML长度: ${previousXmlWithoutResourceId.length}")
+        return isSame
+    }
+
+    /**
+     * 从XML字符串中删除resource-id属性
+     * @param xmlString 原始XML字符串
+     * @return 删除resource-id属性后的XML字符串
+     */
+    private fun removeResourceIdFromXml(xmlString: String): String {
+        // 使用正则表达式删除resource-id属性
+        // 匹配 resource-id="..." 或 resource-id='...' 的模式
+        val resourceIdPattern = """\s*resource-id\s*=\s*["'][^"']*["']""".toRegex()
+        return xmlString.replace(resourceIdPattern, "")
+    }
+
+    /**
+     * 发送XML未变化的错误信息
+     */
+    private fun sendXmlUnchangedError() {
+        val errorMessage = "点击执行动作之后，View视图发生了变化，但是当前XML的元素没有发生变化。请结合当前XML确认当前动作和任务是否执行成功。"
+        Log.d(TAG, "发送XML未变化错误: $errorMessage")
+        
+        val message = MobileGPTMessage().apply {
+            messageType = MobileGPTMessage.TYPE_ERROR
+            errType = MobileGPTMessage.ERROR_TYPE_ACTION
+            errMessage = errorMessage
+            preXml = previousScreenXML  // 包含上一次的XML
+            action = currentAction      // 包含当前执行的动作
+            instruction = currentInstruction // 包含当前发送的指令
+        }
+        
+        mExecutorService.execute { 
+            mClient?.sendMessage(message)
+        }
+        
+        // 发送错误信息后，重置状态变量
+        screenNeedUpdate = false
+        xmlPending = false
+        firstScreen = false
     }
 
     /**
