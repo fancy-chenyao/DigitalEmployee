@@ -399,3 +399,5 @@ class Memory:
                 original_subtasks_data.pop(original_pointer)
 
         return original_subtasks_data
+    def delete_subtask(self, substask_name):
+        self.page_manager.delete_subtask(substask_name)

@@ -29,6 +29,7 @@ class DeriveAgent:
         if suggestions is None:
             suggestions = []
         if action_failed:
+            # 按照匹配删除
             self.action_history.pop()
             derive_prompt = derive_agent_prompt.get_prompts(self.instruction, self.subtask,
                                                             self.subtask_history + self.action_history, screen,
@@ -37,7 +38,7 @@ class DeriveAgent:
             # 统一传入 suggestions 以兼容新签名
             derive_prompt = derive_agent_prompt.get_prompts(self.instruction, self.subtask,
                                                             self.subtask_history + self.action_history, screen,
-                                                            examples, suggestions)
+                                                            examples, [])
         # 生成大模型的提示词（整合所有推导依据）
         # derive_agent_prompt.get_prompts：传入用户指令、当前子任务、历史记录、界面信息、示例，生成结构化提示词
         # 提示词内容示例：“用户要‘发消息’，当前子任务是‘点击发送’，历史已执行‘输入文本’，界面有‘发送按钮’，请生成点击坐标”

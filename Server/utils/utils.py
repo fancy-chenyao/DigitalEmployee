@@ -11,16 +11,55 @@ import threading
 import time
 import hashlib
 from collections import OrderedDict
+import logging
+from datetime import datetime
 
 
 def log(msg, color='white'):
-    if not color:
-        print(msg)
-        return
-
-    colored_log = colored(msg, color, attrs=['bold'])
-    print(colored_log)
-    print()
+    # 获取当前时间戳
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    
+    # # 控制台输出（带颜色）
+    # if not color:
+    #     print(msg)
+    # else:
+    #     colored_log = colored(msg, color, attrs=['bold'])
+    #     print(colored_log)
+    #     print()
+    
+    # 文件输出（无颜色，带时间戳）
+    try:
+        logger = logging.getLogger()
+        if logger.handlers:  # 如果日志系统已初始化
+            # 根据颜色确定日志级别
+            level_map = {
+                'red': logging.ERROR,
+                'yellow': logging.WARNING,
+                'green': logging.INFO,
+                'blue': logging.INFO,
+                'white': logging.INFO,
+                'cyan': logging.DEBUG
+            }
+            level = level_map.get(color, logging.INFO)
+            
+            # 创建日志记录
+            record = logging.LogRecord(
+                name=logger.name,
+                level=level,
+                pathname="",
+                lineno=0,
+                msg=f"[{timestamp}] {msg}",
+                args=(),
+                exc_info=None
+            )
+            logger.handle(record)
+        else:
+            # 如果日志系统未初始化，直接写入文件
+            with open('server.log', 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] {msg}\n")
+    except Exception as e:
+        # 如果文件写入失败，至少保证控制台输出
+        pass
 
 
 def safe_literal_eval(x):
