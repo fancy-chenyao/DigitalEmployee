@@ -1,0 +1,111 @@
+<?xml version="1.0" ?>
+<div id="view_162675371" index="98">
+	<div id="view_254859957" index="4">
+		<button id="iv_back" description="返回" index="0"/>
+		<MaterialTextView text="关闭" id="view_153314110" index="1"/>
+		<MaterialTextView text="拟请假时间" id="view_205673887" index="2"/>
+		<View id="view_105846508" index="3"/>
+	</div>
+	<View id="view_124679498" index="5"/>
+	<div id="view_263983900" index="27">
+		<MaterialTextView text="年休假 (工作日)" id="view_50375867" index="6"/>
+		<button id="layoutStartDate" index="14">
+			<AppCompatImageView id="view_260879832" description="必填" index="7"/>
+			<MaterialTextView text="开始时间" id="view_190934321" index="8"/>
+			<View id="view_212245526" index="9"/>
+			<MaterialTextView text="2025年09月19日" id="tvStartDate" index="10"/>
+			<button id="layoutStartTimeType" index="13">
+				<MaterialTextView text="全天" id="tvStartTimeType" index="11"/>
+				<AppCompatImageView id="view_92494231" description="选择" index="12"/>
+			</button>
+		</button>
+		<button id="layoutEndDate" index="21">
+			<MaterialTextView text="结束时间" id="view_219012" index="15"/>
+			<View id="view_170830701" index="16"/>
+			<MaterialTextView text="2025年09月19日" id="tvEndDate" index="17"/>
+			<button id="layoutEndTimeType" index="20">
+				<MaterialTextView text="全天" id="tvEndTimeType" index="18"/>
+				<AppCompatImageView id="view_23618466" description="选择" index="19"/>
+			</button>
+		</button>
+		<div id="view_242345103" index="26">
+			<MaterialTextView text="年休假对应年份" id="view_152696883" index="22"/>
+			<View id="view_69232624" index="23"/>
+			<MaterialTextView text="2025年年假" id="view_85430633" index="24"/>
+			<AppCompatImageView id="view_160241646" description="选择" index="25"/>
+		</div>
+	</div>
+	<div id="customDatePicker" index="92">
+		<div id="view_88760490" index="33">
+			<div id="view_6674325" index="31">
+				<MaterialTextView text="2025" id="tvYear" index="29"/>
+				<MaterialTextView text="周六, 9月 20" id="tvSelectedDate" index="30"/>
+			</div>
+			<button id="ivClose" description="关闭" index="32"/>
+		</div>
+		<div id="view_127607963" index="37">
+			<button id="ivPrevMonth" description="上一个月" index="34"/>
+			<MaterialTextView text="九月 2025" id="tvMonth" index="35"/>
+			<button id="ivNextMonth" description="下一个月" index="36"/>
+		</div>
+		<div id="view_198151187" index="45">
+			<MaterialTextView text="S" id="view_219676728" index="38"/>
+			<MaterialTextView text="M" id="view_110712849" index="39"/>
+			<MaterialTextView text="T" id="view_105241974" index="40"/>
+			<MaterialTextView text="W" id="view_75329399" index="41"/>
+			<MaterialTextView text="T" id="view_241756132" index="42"/>
+			<MaterialTextView text="F" id="view_128607309" index="43"/>
+			<MaterialTextView text="S" id="view_246045442" index="44"/>
+		</div>
+		<GridLayout id="gridLayoutDates" index="88">
+			<button id="view_146033679" index="46"/>
+			<button text="1" id="view_109782172" index="47"/>
+			<button text="2" id="view_185487013" index="48"/>
+			<button text="3" id="view_162263674" index="49"/>
+			<button text="4" id="view_108239403" index="50"/>
+			<button text="5" id="view_7597704" index="51"/>
+			<button text="6" id="view_154808353" index="52"/>
+			<button text="7" id="view_49724486" index="53"/>
+			<button text="8" id="view_76525063" index="54"/>
+			<button text="9" id="view_144534324" index="55"/>
+			<button text="10" id="view_266906973" index="56"/>
+			<button text="11" id="view_231888594" index="57"/>
+			<button text="12" id="view_24060835" index="58"/>
+			<button text="13" id="view_205522592" index="59"/>
+			<button text="14" id="view_151503449" index="60"/>
+			<button text="15" id="view_257625630" index="61"/>
+			<button text="16" id="view_21387007" index="62"/>
+			<button text="17" id="view_28241100" index="63"/>
+			<button text="18" id="view_90778389" index="64"/>
+			<button text="19" id="view_2485802" index="65"/>
+			<button text="20" id="view_221471771" index="66"/>
+			<button text="21" id="view_256117176" index="67"/>
+			<button text="22" id="view_121529233" index="68"/>
+			<button text="23" id="view_185385718" index="69"/>
+			<button text="24" id="view_135931639" index="70"/>
+			<button text="25" id="view_84674916" index="71"/>
+			<button text="26" id="view_139765709" index="72"/>
+			<button text="27" id="view_213522562" index="73"/>
+			<button text="28" id="view_88095635" index="74"/>
+			<button text="29" id="view_87185360" index="75"/>
+			<button text="30" id="view_135328713" index="76"/>
+			<button id="view_267729614" index="77"/>
+			<button id="view_212401647" index="78"/>
+			<button id="view_120398076" index="79"/>
+			<button id="view_220988293" index="80"/>
+			<button id="view_44971482" index="81"/>
+			<button id="view_154241547" index="82"/>
+			<button id="view_27873512" index="83"/>
+			<button id="view_120476417" index="84"/>
+			<button id="view_264885670" index="85"/>
+			<button id="view_208452583" index="86"/>
+			<button id="view_121017236" index="87"/>
+		</GridLayout>
+		<div id="view_172562822" index="91">
+			<button text="Cancel" id="tvCancel" index="89"/>
+			<button text="OK" id="tvOk" index="90"/>
+		</div>
+	</div>
+	<div id="timePickerContainer" index="95"/>
+	<button text="拟请假1天, 确认" id="btnConfirm" index="96"/>
+</div>

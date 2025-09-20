@@ -209,7 +209,7 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
     }
     
     /**
-     * 构建错误数据，包含preXml信息
+     * 构建错误数据，包含preXml和curXml信息
      * @param message 错误消息对象
      * @return 格式化的错误数据字符串
      */
@@ -217,6 +217,13 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
         val errorData = StringBuilder()
         errorData.append("ERROR_TYPE:${message.errType}\n")
         errorData.append("ERROR_MESSAGE:${message.errMessage}\n")
+        
+        // 如果有curXml，则包含在错误数据中
+        if (message.curXml.isNotEmpty()) {
+            errorData.append("CUR_XML:\n")
+            errorData.append(message.curXml)
+            errorData.append("\n")
+        }
         
         // 如果有preXml，则包含在错误数据中
         if (message.preXml.isNotEmpty()) {
