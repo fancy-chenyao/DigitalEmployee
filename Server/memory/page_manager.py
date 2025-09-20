@@ -100,9 +100,11 @@ class PageManager:
         self.action_data.append(new_action_data)
 
     def get_next_action(self, subtask: dict, screen: str, step: int):
-        # 步骤1：获取当前子任务名（如“click_send_button”）
+        # 步骤1：获取当前子任务名（如"click_send_button"）
         curr_subtask_name = subtask['name']
         examples = []
+        log(f"🔍 动作匹配检查: 子任务='{curr_subtask_name}', 步骤={step}, 历史动作数量={len(self.action_data)}", "blue")
+        
         # 步骤2：遍历内存中的动作列表，查找匹配的动作
         for action_data in self.action_data:
             # 匹配条件：1. 关联的子任务名一致；2. 动作步骤一致；3. 未被执行过（traversed=False）
@@ -115,11 +117,18 @@ class PageManager:
                     subtask_arguments = subtask['parameters']
                     adapted_action = adapt_action(next_base_action, screen, subtask_arguments)
                     if adapted_action:
+                        log(f"🔥 热启动: 动作复用成功，子任务='{curr_subtask_name}', 动作={adapted_action['name']}", "green")
                         return adapted_action
+                    else:
+                        log(f"⚠️ 动作适配失败: 子任务='{curr_subtask_name}', 原始动作={next_base_action}", "yellow")
+        
         # 若未找到可执行动作，但有示例，返回示例列表（供DeriveAgent泛化）
         if len(examples) > 0:
+            log(f"🔥 热启动: 找到历史示例，子任务='{curr_subtask_name}', 示例数量={len(examples)}", "green")
             return {"examples": examples}
+        
         # 若既无动作也无示例，返回None（需DeriveAgent新生成动作）
+        log(f"❄️ 冷启动: 无历史动作，子任务='{curr_subtask_name}', 将生成新动作", "yellow")
         return None
 
     def update_subtask_info(self, subtask) -> None:

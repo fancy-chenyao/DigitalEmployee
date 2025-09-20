@@ -39,14 +39,26 @@ class Memory:
         page_header = ['index', 'available_subtasks', 'trigger_uis', 'extra_uis', "screen"]
         hierarchy_header = ['index', 'screen', 'embedding']
 
+        log(f"📊 内存初始化: 任务='{task_name}', 指令='{instruction[:50]}...'", "blue")
+
         # 使用缓存优化数据库查询
         self.task_db = init_database(self.task_db_path, task_header, use_cache=True)
+        log(f"📊 任务数据库加载: 任务数量={len(self.task_db)}", "cyan")
+        
         self.page_db = init_database(self.page_path, page_header, use_cache=True)
         self.page_db.set_index('index', drop=False, inplace=True)
+        log(f"📊 页面数据库加载: 页面数量={len(self.page_db)}", "cyan")
+        
         self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header, use_cache=True)
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
+        log(f"📊 层级数据库加载: 层级数量={len(self.hierarchy_db)}", "cyan")
         
         self.task_path = self.__get_task_data(self.task_name)
+        if self.task_path:
+            log(f"🔥 热启动: 找到任务历史路径，页面数量={len(self.task_path)}", "green")
+        else:
+            log(f"❄️ 冷启动: 无任务历史路径，将学习新流程", "yellow")
+            
         self.page_managers: Dict[int, PageManager] = {}
         self.page_manager = None
         self._cache_dirty = False  # 缓存脏标记
@@ -62,10 +74,13 @@ class Memory:
         #
         # node_manager = NodeManager(self.page_db, self, parsed_xml, encoded_xml)
         # node_index, new_subtasks = node_manager.search(candidate_nodes_indexes)
+        log(f"🔍 页面匹配检查: 历史页面数量={len(self.hierarchy_db)}", "blue")
         most_similar_node_index = self.__search_most_similar_hierarchy_node(hierarchy_xml)
         if most_similar_node_index >= 0:
+            log(f"🔥 热启动: 页面匹配成功，页面索引={most_similar_node_index}", "green")
             return most_similar_node_index, []
         else:
+            log(f"❄️ 冷启动: 未找到匹配的历史页面，将探索新界面", "yellow")
             return -1, []
 
     def get_available_subtasks(self, page_index):
@@ -301,6 +316,7 @@ class Memory:
         # Search for the task
         matched_tasks = self.task_db[(self.task_db['name'] == task_name)]
         if matched_tasks.empty:
+            log(f"❄️ 冷启动: 任务 '{task_name}' 在数据库中不存在", "yellow")
             return {}
         else:
             task_data = matched_tasks.iloc[0].to_dict()
@@ -313,8 +329,8 @@ class Memory:
                     subtasks_data.append({"name": subtask, "traversed": False})
                 task_path[int(page_index)] = subtasks_data
 
-            log(f"Known path for the task: {task_name}", "yellow")
-            log(task_path, "yellow")
+            log(f"🔥 热启动: 找到任务 '{task_name}' 的历史路径", "green")
+            log(f"📊 任务路径详情: {task_path}", "cyan")
 
             return task_path
 
@@ -340,9 +356,14 @@ class Memory:
         candidates = self.hierarchy_db.sort_values('similarity', ascending=False).head(5).to_dict(orient='records')
         if candidates:
             highest_similarity = candidates[0]['similarity']
-            print(highest_similarity)
+            log(f"📊 相似度计算: 最高相似度={highest_similarity:.4f}, 阈值=0.95", "cyan")
             if highest_similarity > 0.95:
+                log(f"✅ 页面匹配成功: 页面索引={candidates[0]['index']}, 相似度={highest_similarity:.4f}", "green")
                 return candidates[0]['index']
+            else:
+                log(f"❌ 页面匹配失败: 相似度{highest_similarity:.4f}低于阈值0.95", "yellow")
+        else:
+            log("❌ 页面匹配失败: 无历史页面数据", "yellow")
         return -1
 
     def __merge_subtasks_data(self, original_subtasks_data, merged_subtasks) -> list:

@@ -25,16 +25,24 @@ class TaskAgent:
             self._cache_dirty = False
         
         known_tasks = self.database.to_dict(orient='records') # 读取已知任务列表
+        log(f"📋 任务匹配检查: 已知任务数量={len(known_tasks)}", "blue")
+        
         # 调用提示词模板生成查询，调用大模型
         response = query(messages=task_agent_prompt.get_prompts(instruction, known_tasks),
                          model=os.getenv("TASK_AGENT_GPT_VERSION"))
 
         task = response["api"]
         is_new = True # 默认标记为新任务
+        
         # 若存在匹配的已知任务，更新任务库并标记为非新任务
         if str(response["found_match"]).lower() == "true":
             self.update_task(task)
             is_new = False
+            log(f"🔥 热启动: 任务 '{task['name']}' 匹配到历史经验", "green")
+            log(f"📊 任务详情: {task}", "cyan")
+        else:
+            log(f"❄️ 冷启动: 任务 '{task['name']}' 为新任务，将学习新流程", "yellow")
+            log(f"📊 任务详情: {task}", "cyan")
 
         return task, is_new
 
