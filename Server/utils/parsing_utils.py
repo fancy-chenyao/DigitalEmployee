@@ -5,7 +5,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
-from utils.utils import log
+from log_config import log
 
 
 def find_parent_node(root, child_index: int) -> (int, ET):

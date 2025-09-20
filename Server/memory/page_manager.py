@@ -5,7 +5,7 @@ import pandas as pd
 
 from agents import param_fill_agent
 from utils.action_utils import adapt_action
-from utils.utils import log
+from log_config import log
 from utils.mongo_utils import load_dataframe, save_dataframe
 
 
