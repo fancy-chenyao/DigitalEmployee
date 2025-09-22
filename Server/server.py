@@ -546,6 +546,7 @@ class Server:
             # 解析XML
             parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
             
+            
             log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
             # 调用MobileGPT的get_next_action方法
@@ -706,14 +707,29 @@ class Server:
             else:
                 # 不需要回退，根据问题类型处理
                 advice = reflection.advice
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+                # 导入screen_parser
+                from screenParser.Encoder import xmlEncoder
+                screen_parser = xmlEncoder()
+                # xml_content = message.get('xml', '')
+                # parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
                 if reflection.problem_type == 'area':
-                    # self._handle_area_error(session, error_info, advice, screen_count)
-                    MobileGPT.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
+                    # 获取MobileGPT实例并调用方法
+                    mobilegpt = getattr(session, 'mobilegpt', None)
+                    if mobilegpt is None:
+                        log("MobileGPT实例不存在，无法处理错误", "red")
+                        self._send_finish_action(client_socket, "MobileGPT实例不存在")
+                        return
+                    mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
                     
                 else:
-                    # self._handle_instruction_error(session, error_info, advice, screen_count)
-                    MobileGPT.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
+                    # 获取MobileGPT实例并调用方法
+                    mobilegpt = getattr(session, 'mobilegpt', None)
+                    if mobilegpt is None:
+                        log("MobileGPT实例不存在，无法处理错误", "red")
+                        self._send_finish_action(client_socket, "MobileGPT实例不存在")
+                        return
+                    mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
                     
         except Exception as e:
             log(f"处理错误消息时发生异常: {e}", "red")
