@@ -11,17 +11,11 @@ import threading
 import time
 import hashlib
 from collections import OrderedDict
-import logging
 from datetime import datetime
 
 
 # 统一到标准 logging：从 log_config 重导出 log
-try:
-    from log_config import log  # type: ignore
-except Exception:
-    # 兜底：若 log_config 尚未可用，提供最简回退到标准 logging
-    def log(msg, color='white'):
-        logging.getLogger(__name__).info(msg)
+from log_config import log
 
 
 def safe_literal_eval(x):

@@ -1,7 +1,6 @@
 import os, sys
 from dotenv import load_dotenv
 from server import Server
-from server_explore import Explorer
 
 # os.chdir('./MobileGPT_server')
 sys.path.append('.')
