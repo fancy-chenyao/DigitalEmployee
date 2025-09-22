@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 
 from utils import parsing_utils
-from utils.utils import log
+from log_config import log
 
 
 def generalize_action(action: dict, subtask: dict, screen) -> dict:

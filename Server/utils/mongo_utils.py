@@ -7,6 +7,11 @@ import pandas as pd
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 
+# 导入配置管理
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from env_config import Config
+
 
 # 全局连接池实例
 _mongo_client: Optional[MongoClient] = None
@@ -21,12 +26,13 @@ def get_db():
     if _mongo_client is None:
         with _lock:
             if _mongo_client is None:
-                uri = os.getenv("MONGODB_URI", "mongodb://192.168.100.56:27017")
-                db_name = os.getenv("MONGODB_DB", "mobilegpt")
+                # 使用统一的配置管理
+                uri = Config.MONGODB_URI
+                db_name = Config.MONGODB_DB
                 
                 # 连接池配置
-                max_pool_size = int(os.getenv("MONGODB_MAX_POOL_SIZE", "50"))
-                min_pool_size = int(os.getenv("MONGODB_MIN_POOL_SIZE", "5"))
+                max_pool_size = Config.MONGODB_MAX_POOL_SIZE
+                min_pool_size = Config.MONGODB_MIN_POOL_SIZE
                 
                 try:
                     _mongo_client = MongoClient(
@@ -52,7 +58,7 @@ def get_db():
                     print(f"MongoDB初始化异常: {e}")
                     raise e
     
-    return _mongo_client[os.getenv("MONGODB_DB", "mobilegpt")]
+    return _mongo_client[Config.MONGODB_DB]
 
 
 def load_dataframe(collection_name: str, columns: List[str], use_cache: bool = True) -> pd.DataFrame:

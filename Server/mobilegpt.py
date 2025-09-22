@@ -9,7 +9,8 @@ from agents.derive_agent import DeriveAgent
 from agents.explore_agent import ExploreAgent
 from agents.select_agent import SelectAgent
 from memory.memory_manager import Memory
-from utils.utils import log, parse_completion_rate
+from log_config import log
+from utils.utils import parse_completion_rate
 from utils.parallel_ai import parallel_query
 from utils.mongo_utils import load_dataframe, save_dataframe
 
@@ -62,11 +63,14 @@ class MobileGPT:
         # 若为新任务，设为学习模式（需记录流程到内存）
         if is_new_task:
             self.task_status = Status.LEARN
+            log(f"❄️ 冷启动: 任务 '{task['name']}' 初始化为学习模式", "yellow")
+        else:
+            log(f"🔥 热启动: 任务 '{task['name']}' 初始化为回忆模式", "green")
 
         log('Mobile Agent Initialized for Task: ' + task['name'])
 
     def get_next_action(self, parsed_xml=None, hierarchy_xml=None, encoded_xml=None, subtask_failed=False, action_failed=False, suggestions=None):
-        log(":::::::::MobileGPT received new screen:::::::::", 'red')
+        log(":::::::::MobileGPT received new screen:::::::::", 'blue')
         parsed_xml = parsed_xml or self.parsed_xml
         hierarchy_xml = hierarchy_xml or self.hierarchy_xml
         encoded_xml = encoded_xml or self.encoded_xml
@@ -95,9 +99,9 @@ class MobileGPT:
         available_subtasks = self.memory.get_available_subtasks(page_index)
         if len(new_subtasks) > 0:
             available_subtasks += new_subtasks
-        # 若子任务选择出错，删除子任务名称相同，清楚当前子任务状态
+        # 若子任务选择出错，清楚当前子任务状态
         if subtask_failed:
-            self.memory.delete_subtask(self.current_subtask['name'])
+            # self.memory.delete_subtask(self.current_subtask['name'])
             self.current_subtask = None
 
         # 若当前无子任务，选择下一个子任务
@@ -155,20 +159,26 @@ class MobileGPT:
         current_action_data = {"page_index": self.current_page_index, "action": next_action, "screen": self.encoded_xml,
                                "example": {}}
 
+        log(f"📊 动作获取结果: 子任务='{self.current_subtask['name'] if self.current_subtask else 'None'}'", "blue")
 
         if next_action:
             self.subtask_status = Status.RECALL
+            log(f"🔥 热启动: 子任务状态切换到回忆模式", "green")
             # 若内存中有动作示例，调用推导智能体泛化动作（适配当前界面）
             if "examples" in next_action:
+                log(f"🔥 热启动: 使用历史示例进行动作泛化，示例数量={len(next_action['examples'])}", "green")
                 next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions, examples=next_action['examples'])
                 current_action_data['action'] = next_action
                 current_action_data['example'] = example
+            else:
+                log(f"🔥 热启动: 直接使用历史动作", "green")
 
         # 若内存中无动作，调用推导智能体新生成动作（学习模式）
         else:
             # 若子任务处于等待或学习状态，切换到学习模式生成新动作
             if self.subtask_status == Status.WAIT or self.subtask_status == Status.LEARN:
                 self.subtask_status = Status.LEARN
+                log(f"❄️ 冷启动: 子任务状态切换到学习模式，将生成新动作", "yellow")
                 # Here
                 next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions)
                 current_action_data['action'] = next_action
@@ -176,6 +186,7 @@ class MobileGPT:
 
             # 若处于回忆模式但无动作，处理任务分歧（重新选择子任务）
             elif self.subtask_status == Status.RECALL:
+                log(f"⚠️ 任务分歧: 回忆模式但无历史动作，重新选择子任务", "yellow")
                 self.__prepare_diverge_subtask()
                 return self.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
         # 记录当前动作到子任务数据
@@ -200,9 +211,10 @@ class MobileGPT:
             log(f"Something wrong. Cannot find {info_name} inside subtask: {self.current_subtask}", "red")
 
     def __finish_subtask(self, mark_finish=True, explicit_finish=False):
-        log("finish subtask!!", "red")
-        log(f"subtask: {self.subtask_status}, task: {self.task_status}", "red")
+        log("finish subtask!!", "green")
+        log(f"subtask: {self.subtask_status}, task: {self.task_status}", "green")
         if self.subtask_status == Status.LEARN and self.task_status == Status.LEARN:
+            log(f"❄️ 冷启动: 学习模式完成子任务，将保存到历史经验", "yellow")
             if mark_finish:
                 finish_action = {"name": "finish", "parameters": {}}
                 self.current_subtask_data['actions'].append(
@@ -217,6 +229,9 @@ class MobileGPT:
             action_summary = self.derive_agent.summarize_actions()
             if action_summary:
                 self.subtask_history.append(action_summary)
+                log(f"💾 保存子任务历史: {action_summary}", "cyan")
+        else:
+            log(f"🔥 热启动: 回忆模式完成子任务，无需保存", "green")
 
         if self.subtask_status == Status.RECALL:
             if explicit_finish:

@@ -13,7 +13,7 @@ import json
 
 from mobilegpt import MobileGPT
 from memory.memory_manager import Memory
-from utils.utils import log
+from log_config import log
 
 
 @dataclass

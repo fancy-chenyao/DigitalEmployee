@@ -5,7 +5,8 @@ import xml.etree.ElementTree as ET
 
 from agents.prompts import node_expand_prompt
 from utils.parsing_utils import find_matching_node, get_trigger_ui_attributes, get_extra_ui_attributes
-from utils.utils import log, query
+from log_config import log
+from utils.utils import query
 
 
 class NodeManager:

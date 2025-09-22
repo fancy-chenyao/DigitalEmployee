@@ -6,7 +6,7 @@ from datetime import datetime
 from agents.explore_agent import ExploreAgent
 from memory.memory_manager import Memory
 from screenParser.Encoder import xmlEncoder
-from utils.utils import log
+from log_config import log
 # server_explore.py 是一个“离线探索模式”的后台服务：
 # 让手机把某 App 的所有界面截图 + XML 一次性传过来，服务端自动遍历并建立整棵 UI 状态图，生成“经验库”，供以后正式任务时直接调用，避免重复探索。
 

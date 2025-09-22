@@ -530,8 +530,9 @@ class MobileService : Service() {
                 messageType = MobileGPTMessage.TYPE_ERROR
                 errType = MobileGPTMessage.ERROR_TYPE_ACTION
                 errMessage = error
-                preXml = previousScreenXML  // 包含上一次的XML
-                action = currentAction      // 包含当前执行的动作
+                curXml = currentScreenXML    // 包含当前的XML
+                preXml = previousScreenXML   // 包含上一次的XML
+                action = currentAction       // 包含当前执行的动作
                 instruction = currentInstruction // 包含当前发送的指令
             }
             mExecutorService.execute { mClient?.sendMessage(message) }
@@ -804,9 +805,10 @@ class MobileService : Service() {
             messageType = MobileGPTMessage.TYPE_ERROR
             errType = MobileGPTMessage.ERROR_TYPE_ACTION
             errMessage = errorMessage
-            preXml = previousScreenXML
-            action = currentAction
-            instruction = currentInstruction
+            curXml = currentScreenXML    // 包含当前的XML
+            preXml = previousScreenXML   // 包含上一次的XML
+            action = currentAction       // 包含当前执行的动作
+            instruction = currentInstruction // 包含当前发送的指令
             this.remark = remark
         }
         mExecutorService.execute { mClient?.sendMessage(message) }
@@ -1288,8 +1290,9 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             messageType = MobileGPTMessage.TYPE_ERROR
             errType = MobileGPTMessage.ERROR_TYPE_ACTION
             errMessage = errorMessage
-            preXml = previousScreenXML  // 包含上一次的XML
-            action = currentAction      // 包含当前执行的动作
+            curXml = currentScreenXML    // 包含当前的XML
+            preXml = previousScreenXML   // 包含上一次的XML
+            action = currentAction       // 包含当前执行的动作
             instruction = currentInstruction // 包含当前发送的指令
         }
         
@@ -1367,8 +1370,9 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
                 messageType = MobileGPTMessage.TYPE_ERROR
                 errType = MobileGPTMessage.ERROR_TYPE_ACTION
                 errMessage = reason
-                preXml = previousScreenXML  // 包含上一次的XML
-                action = currentAction      // 包含当前执行的动作
+                curXml = currentScreenXML    // 包含当前的XML
+                preXml = previousScreenXML   // 包含上一次的XML
+                action = currentAction       // 包含当前执行的动作
                 instruction = currentInstruction // 包含当前发送的指令
             }
             mExecutorService.execute { mClient?.sendMessage(message) }
