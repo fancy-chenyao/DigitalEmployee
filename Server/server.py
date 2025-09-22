@@ -25,7 +25,6 @@ if project_root not in sys.path:
 from Reflector_Agent.base import AgentMemory
 from Reflector_Agent.reflector import Reflector
 
-
 class Server:
     def __init__(self, host=None, port=None, buffer_size=None):
         # 设置增强日志
@@ -649,9 +648,6 @@ class Server:
         """处理问答消息"""
         qa_content = message.get('qa', '')
         log(f"收到问答消息: {qa_content}", "blue")
-        
-        # 可以在这里添加问答处理逻辑
-        # 目前只是记录日志
 
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
@@ -680,18 +676,20 @@ class Server:
             if error_info.get('pre_xml'):
                 self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
 
+            
+                screen_parser = xmlEncoder()
+                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
+                parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
+
             # 初始化AgentMemory
             self.agent_memory = AgentMemory(
                 instruction=error_info.get('instruction', 'None'),
                 errTYPE=error_info.get('error_type', 'UNKNOWN'),
                 errMessage=error_info.get('error_message', 'No message'),
-                curXML=error_info.get('cur_xml', 'None'),
-                preXML=error_info.get('pre_xml', 'None'),
+                curXML=encoded_xml,
+                preXML=encoded_xml_pre,
                 action=error_info.get('action', 'None')
             )
-            log("---------------------")
-            log(f"错误信息: {error_info}", "red")
-            log("---------------------------")
 
             log(self.agent_memory, "blue")
 
@@ -706,12 +704,6 @@ class Server:
             else:
                 # 不需要回退，根据问题类型处理
                 advice = reflection.advice
-                # 导入screen_parser
-                from screenParser.Encoder import xmlEncoder
-                screen_parser = xmlEncoder()
-                # xml_content = message.get('xml', '')
-                # parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
                 if reflection.problem_type == 'area':
                     # 获取MobileGPT实例并调用方法
                     mobilegpt = getattr(session, 'mobilegpt', None)
