@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 
-from utils.utils import log
+from log_config import log
 from session_manager import SessionManager, ClientSession
 
 

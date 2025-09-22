@@ -41,9 +41,43 @@ class DeriveAgent:
                                                             examples, [])
         # 生成大模型的提示词（整合所有推导依据）
         # derive_agent_prompt.get_prompts：传入用户指令、当前子任务、历史记录、界面信息、示例，生成结构化提示词
-        # 提示词内容示例：“用户要‘发消息’，当前子任务是‘点击发送’，历史已执行‘输入文本’，界面有‘发送按钮’，请生成点击坐标”
+        # 提示词内容示例："用户要'发消息'，当前子任务是'点击发送'，历史已执行'输入文本'，界面有'发送按钮'，请生成点击坐标"
         response = query(derive_prompt, model=os.getenv("DERIVE_AGENT_GPT_VERSION"))
-        response['completion_rate'] = parse_completion_rate(response['completion_rate'])
+        
+        # 检查响应是否为有效字典
+        if not isinstance(response, dict):
+            log(f"❌ derive_agent返回无效响应格式: {type(response)}", "red")
+            # 创建默认响应
+            response = {
+                "reasoning": "AI返回格式错误，使用默认响应",
+                "action": {"name": "finish", "parameters": {}},
+                "completion_rate": 0,
+                "plan": "无法生成计划"
+            }
+        
+        # 安全地处理completion_rate字段
+        if 'completion_rate' in response:
+            try:
+                response['completion_rate'] = parse_completion_rate(response['completion_rate'])
+            except Exception as e:
+                log(f"⚠️ completion_rate解析失败: {e}，设置默认值0", "yellow")
+                response['completion_rate'] = 0
+        else:
+            # 如果没有completion_rate字段，设置默认值
+            response['completion_rate'] = 0
+            log(f"⚠️ derive_agent返回缺少completion_rate字段，设置默认值0", "yellow")
+        
+        # 确保必要的字段存在
+        if 'action' not in response:
+            log(f"❌ derive_agent返回缺少action字段，设置默认finish动作", "red")
+            response['action'] = {"name": "finish", "parameters": {}}
+        
+        if 'reasoning' not in response:
+            response['reasoning'] = "AI未提供推理过程"
+        
+        if 'plan' not in response:
+            response['plan'] = "AI未提供下一步计划"
+        
         self.response_history.append(response)
 
         history = "your past response: " + json.dumps(response) + " has been executed successfully."

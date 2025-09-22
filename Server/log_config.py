@@ -98,6 +98,22 @@ def log_with_color(message: str, color: str = "white", level: str = "INFO"):
     # 输出日志
     logger.handle(record)
 
+def log(message: str, color: str = "white"):
+    """统一日志入口，兼容旧接口: log(msg, color)
+    颜色到级别的映射：
+      red -> ERROR, yellow -> WARNING, green/blue/white -> INFO, cyan -> DEBUG
+    """
+    level_map = {
+        'red': 'ERROR',
+        'yellow': 'WARNING',
+        'green': 'INFO',
+        'blue': 'INFO',
+        'white': 'INFO',
+        'cyan': 'DEBUG',
+    }
+    level = level_map.get(color, 'INFO')
+    log_with_color(message, color=color, level=level)
+
 def log_system_status():
     """输出系统状态日志"""
     print("\n" + "="*60)

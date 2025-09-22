@@ -6,8 +6,7 @@ import queue
 import time
 from typing import Optional
 
-from utils.utils import log
-from log_config import setup_logging, log_with_color, log_system_status
+from log_config import log, setup_logging, log_with_color, log_system_status
 from screenParser.Encoder import xmlEncoder
 from mobilegpt import MobileGPT
 from agents.task_agent import TaskAgent
@@ -93,7 +92,7 @@ class Server:
         server.listen()
 
         log("--------------------------------------------------------")
-        log(f"Server is listening on {real_ip}:{self.port}\nInput this IP address into the app. : [{real_ip}]", "red")
+        log(f"Server is listening on {real_ip}:{self.port}\nInput this IP address into the app. : [{real_ip}]", "green")
 
         while True:
             client_socket, client_address = server.accept()
