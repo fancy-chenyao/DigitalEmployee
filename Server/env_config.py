@@ -25,7 +25,7 @@ class Config:
     
     # 内存配置
     MEMORY_DIRECTORY: str = os.getenv("MEMORY_DIRECTORY", "./memory")
-    ENABLE_DB: bool = os.getenv("ENABLE_DB", "false").lower() == "true"
+    ENABLE_DB: bool = os.getenv("ENABLE_DB", "true").lower() == "true"
     
     # 其他配置
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")

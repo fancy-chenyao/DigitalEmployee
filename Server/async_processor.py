@@ -245,17 +245,16 @@ class AsyncProcessor:
             return self._process_xml(data)
         elif task_type == "screenshot_processing":
             return self._process_screenshot(data)
-        elif task_type == "ai_inference":
-            return self._process_ai_inference(data)
-        elif task_type == "database_operation":
-            return self._process_database_operation(data)
-        elif task_type == "file_operation":
-            return self._process_file_operation(data)
         elif task_type == "error_recovery":
             return self._process_error_recovery(data)
         else:
             raise ValueError(f"未知的任务类型: {task_type}")
     
+    def _is_mobilegpt_ready(self, mobileGPT) -> bool:
+        """快速检查MobileGPT是否准备就绪"""
+        return (hasattr(mobileGPT, 'memory') and 
+                mobileGPT.memory is not None)
+
     def _process_instruction(self, data: dict) -> dict:
         """处理指令相关任务 - 异步版本"""
         instruction = data.get('instruction', '')
@@ -344,7 +343,7 @@ class AsyncProcessor:
                 mobileGPT.init(instruction, task, is_new_task)
                 
                 # 验证初始化是否成功
-                if not hasattr(mobileGPT, 'memory') or mobileGPT.memory is None:
+                if not self._is_mobilegpt_ready(mobileGPT):
                     log("MobileGPT初始化失败，memory属性为空", "red")
                     raise Exception("MobileGPT初始化失败")
                     
@@ -575,23 +574,6 @@ class AsyncProcessor:
             log(f"截图处理失败: {e}", "red")
             return {"status": "screenshot_failed", "error": str(e), "session_id": session_id}
     
-    def _process_ai_inference(self, data: dict) -> dict:
-        """处理AI推理任务"""
-        # 这里可以调用AI Agent相关的方法
-        # 例如：TaskAgent, SelectAgent, DeriveAgent等
-        return {"status": "ai_inference_completed", "data": data}
-    
-    def _process_database_operation(self, data: dict) -> dict:
-        """处理数据库操作任务"""
-        # 这里可以调用数据库相关的方法
-        # 例如：MongoDB操作等
-        return {"status": "database_operation_completed", "data": data}
-    
-    def _process_file_operation(self, data: dict) -> dict:
-        """处理文件操作任务"""
-        # 这里可以调用文件操作相关的方法
-        # 例如：文件读写、截图保存等
-        return {"status": "file_operation_completed", "data": data}
     
     def _stats_loop(self):
         """统计信息更新循环"""
