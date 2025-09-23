@@ -240,7 +240,7 @@ class CustomDatePickerView @JvmOverloads constructor(
         calendar.set(Calendar.DAY_OF_MONTH, day)
         selectedDate = calendar.time
 
-        // // 更新显示
+//        // // 更新显示
 //        updateDisplay()
 
 
