@@ -21,8 +21,11 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import android.view.PixelCopy
+import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.widget.TextView
 import controller.ElementController
 import controller.GenericElement
 import controller.NativeController
@@ -625,84 +628,165 @@ class MobileService : Service() {
     /**
      * 执行点击动作
      * 优先使用GenericElement中的view引用进行直接点击，提高点击成功率和性能
+     * 添加点击成功验证机制，确保点击真正生效
      */
     private fun executeClickAction(activity: Activity, element: GenericElement) {
+        Log.d(TAG, "开始执行点击动作 - 元素: ${element.resourceId}, clickable: ${element.clickable}, enabled: ${element.enabled}")
+        
+        // 记录点击前的屏幕状态，用于验证点击是否成功
+        val preClickScreenHash = getCurrentScreenHash(activity)
+        
         // 首先检查目标元素是否可点击
         if (element.clickable && element.enabled) {
             // 优先使用view引用进行直接点击
             if (element.view != null) {
-            Log.d(TAG, "使用view引用进行直接点击")
-            ElementController.clickElementByView(element) { success ->
-                if (success) {
-                    Log.d(TAG, "通过view引用点击成功")
-                    screenNeedUpdate = true
-                    xmlPending = true
-                } else {
-                    Log.w(TAG, "通过view引用点击失败，回退到传统方式")
-                    // 回退到传统的点击方式
-                    fallbackClickAction(activity, element)
+                Log.d(TAG, "使用view引用进行直接点击")
+                ElementController.clickElementByView(element) { success ->
+                    if (success) {
+                        Log.d(TAG, "view引用点击操作返回成功，验证点击效果...")
+                        // 验证点击是否真正生效
+                        verifyClickSuccess(activity, preClickScreenHash) { verified ->
+                            if (verified) {
+                                Log.d(TAG, "通过view引用点击成功且已验证生效")
+                                screenNeedUpdate = true
+                                xmlPending = true
+                            } else {
+                                Log.w(TAG, "view引用点击操作成功但未生效，回退到传统方式")
+                                fallbackClickAction(activity, element, preClickScreenHash)
+                            }
+                        }
+                    } else {
+                        Log.w(TAG, "通过view引用点击失败，回退到传统方式")
+                        fallbackClickAction(activity, element, preClickScreenHash)
                     }
                 }
             } else {
                 Log.d(TAG, "元素没有view引用，使用传统直接点击方式")
                 // 没有view引用时使用传统方式
-                // 目标元素可点击，直接执行
                 ElementController.clickElement(activity, element.resourceId) { success ->
                     if (success) {
-                        Log.d(TAG, "传统点击动作执行成功")
-                        screenNeedUpdate = true
-                        xmlPending = true
+                        Log.d(TAG, "传统点击操作返回成功，验证点击效果...")
+                        // 验证点击是否真正生效
+                        verifyClickSuccess(activity, preClickScreenHash) { verified ->
+                            if (verified) {
+                                Log.d(TAG, "传统点击成功且已验证生效")
+                                screenNeedUpdate = true
+                                xmlPending = true
+                            } else {
+                                Log.w(TAG, "传统点击操作成功但未生效，回退到坐标点击")
+                                executeCoordinateClick(activity, element)
+                            }
+                        }
                     } else {
-                        Log.e(TAG, "传统点击动作执行失败")
-                        sendActionError("直接点击动作执行失败")
+                        Log.w(TAG, "传统点击动作执行失败，回退到坐标点击")
+                        executeCoordinateClick(activity, element)
                     }
                 }
             }
         } else {
-            Log.d(TAG, "目标元素不可直接点击，使用目标元素坐标点击")
-            clickByCoordinateDP(activity, element) { success ->
-                if (success) {
-                    Log.d(TAG, "使用坐标点击成功")
-                    screenNeedUpdate = true
-                    xmlPending = true
-                } else {
-                    Log.e(TAG, "目标元素不可直接点击，同时使用坐标点击失败")
-                    sendActionError("目标元素不可直接点击，同时坐标点击动作执行失败")
-                }
-            }
+            Log.w(TAG, "目标元素不可点击或未启用，直接使用坐标点击")
+            executeCoordinateClick(activity, element)
         }
     }
 
     /**
      * 传统的点击操作回退方法
+     * 添加屏幕状态验证机制
      */
-    private fun fallbackClickAction(activity: Activity, element: GenericElement) {
+    private fun fallbackClickAction(activity: Activity, element: GenericElement, preClickScreenHash: String) {
         // 首先检查目标元素是否可点击
         if (element.clickable && element.enabled) {
             // 目标元素可点击，直接执行
             ElementController.clickElement(activity, element.resourceId) { success ->
                 if (success) {
-                    Log.d(TAG, "传统点击动作执行成功")
-                    screenNeedUpdate = true
-                    xmlPending = true
+                    Log.d(TAG, "传统回退点击操作返回成功，验证点击效果...")
+                    // 验证点击是否真正生效
+                    verifyClickSuccess(activity, preClickScreenHash) { verified ->
+                        if (verified) {
+                            Log.d(TAG, "传统回退点击成功且已验证生效")
+                            screenNeedUpdate = true
+                            xmlPending = true
+                        } else {
+                            Log.w(TAG, "传统回退点击操作成功但未生效，使用坐标点击")
+                            executeCoordinateClick(activity, element)
+                        }
+                    }
                 } else {
-                    Log.e(TAG, "传统点击动作执行失败")
-                    sendActionError("直接点击动作执行失败")
+                    Log.w(TAG, "传统回退点击动作执行失败，使用坐标点击")
+                    executeCoordinateClick(activity, element)
                 }
             }
         } else {
-            Log.d(TAG, "目标元素不可直接点击，使用目标元素坐标点击")
-            clickByCoordinateDP(activity, element) { success ->
-                if (success) {
-                    Log.d(TAG, "使用坐标点击成功")
-                    screenNeedUpdate = true
-                    xmlPending = true
-                } else {
-                    Log.e(TAG, "目标元素不可直接点击，同时使用坐标点击失败")
-                    sendActionError("目标元素不可直接点击，同时坐标点击动作执行失败")
-                }
+            Log.d(TAG, "目标元素不可直接点击，使用坐标点击")
+            executeCoordinateClick(activity, element)
+        }
+    }
+
+    /**
+     * 执行坐标点击操作
+     */
+    private fun executeCoordinateClick(activity: Activity, element: GenericElement) {
+        Log.d(TAG, "执行坐标点击操作")
+        clickByCoordinateDP(activity, element) { success ->
+            if (success) {
+                Log.d(TAG, "坐标点击成功")
+                screenNeedUpdate = true
+                xmlPending = true
+            } else {
+                Log.e(TAG, "坐标点击失败")
+                sendActionError("所有点击方式都失败了")
             }
         }
+    }
+
+    /**
+     * 验证点击是否成功
+     * 通过比较点击前后的屏幕状态来判断
+     */
+    private fun verifyClickSuccess(activity: Activity, preClickScreenHash: String, callback: (Boolean) -> Unit) {
+        // 等待一段时间让界面响应
+        Handler(Looper.getMainLooper()).postDelayed({
+            val postClickScreenHash = getCurrentScreenHash(activity)
+            val hasChanged = preClickScreenHash != postClickScreenHash
+            Log.d(TAG, "点击验证结果: 屏幕状态${if (hasChanged) "已改变" else "未改变"}")
+            callback(hasChanged)
+        }, 500) // 等待500ms
+    }
+
+    /**
+     * 获取当前屏幕状态的哈希值
+     * 用于判断屏幕是否发生变化
+     */
+    private fun getCurrentScreenHash(activity: Activity): String {
+        return try {
+            val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+            val viewTreeHash = getViewTreeHash(rootView)
+            viewTreeHash.toString()
+        } catch (e: Exception) {
+            Log.w(TAG, "获取屏幕哈希失败: ${e.message}")
+            System.currentTimeMillis().toString()
+        }
+    }
+
+    /**
+     * 递归计算视图树的哈希值
+     */
+    private fun getViewTreeHash(view: View): Int {
+        var hash = view.javaClass.simpleName.hashCode()
+        hash = hash * 31 + view.visibility
+        hash = hash * 31 + view.isEnabled.hashCode()
+        
+        if (view is TextView) {
+            hash = hash * 31 + (view.text?.toString()?.hashCode() ?: 0)
+        }
+        
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                hash = hash * 31 + getViewTreeHash(view.getChildAt(i))
+            }
+        }
+        
+        return hash
     }
 
     /**

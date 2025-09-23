@@ -104,7 +104,7 @@ object NativeController {
             important = view.isImportantForAccessibility,
             enabled = view.isEnabled,
             checked = checked,
-            clickable = view.isClickable,
+            clickable = isViewActuallyClickable(view),
             checkable = when (view) {
                 is CompoundButton -> true
                 else -> false
@@ -903,5 +903,177 @@ object NativeController {
         val rect = android.graphics.Rect()
         if (!view.getGlobalVisibleRect(rect)) return false
         return rect.width() > 0 && rect.height() > 0
+    }
+    
+    /**
+     * 更准确地判断视图是否真正可点击
+     * 解决 ListView 中 LinearLayout 容器 clickable 属性获取不准确的问题
+     * @param view 要检测的视图
+     * @return 视图是否真正可点击
+     */
+    private fun isViewActuallyClickable(view: View): Boolean {
+        // 首先检查基本的 clickable 属性和启用状态
+        if (!view.isClickable || !view.isEnabled) {
+            return false
+        }
+        
+        // 对于特定类型的视图，使用专门的检测逻辑
+        when (view) {
+            is ListView -> {
+                // ListView本身需要检查是否有OnItemClickListener
+                return isListViewClickable(view)
+            }
+            is Button, is ImageButton -> {
+                // 按钮类型通常可信任其clickable属性
+                return true
+            }
+            is TextView -> {
+                // TextView需要检查是否有实际的点击监听器
+                return hasActualClickListener(view)
+            }
+            is ImageView -> {
+                // ImageView需要检查是否有实际的点击监听器
+                return hasActualClickListener(view)
+            }
+        }
+        
+        // 检查视图是否有实际的点击监听器
+        // 使用反射检查 hasOnClickListeners() 方法（API 15+）
+        try {
+            val hasOnClickListenersMethod = View::class.java.getDeclaredMethod("hasOnClickListeners")
+            hasOnClickListenersMethod.isAccessible = true
+            val hasListeners = hasOnClickListenersMethod.invoke(view) as Boolean
+            
+            // 如果没有点击监听器，进一步检查是否为特殊容器
+            if (!hasListeners) {
+                return isSpecialClickableContainer(view)
+            }
+            
+            return hasListeners
+        } catch (e: Exception) {
+            // 如果反射失败，使用备用检测方法
+            return isClickableByFallbackMethod(view)
+        }
+    }
+    
+    /**
+     * 检查ListView是否真正可点击
+     * @param listView 要检测的ListView
+     * @return 是否可点击
+     */
+    private fun isListViewClickable(listView: ListView): Boolean {
+        try {
+            val onItemClickListenerField = ListView::class.java.getDeclaredField("mOnItemClickListener")
+            onItemClickListenerField.isAccessible = true
+            val listener = onItemClickListenerField.get(listView)
+            return listener != null
+        } catch (e: Exception) {
+            // 如果反射失败，保守地返回false，因为ListView本身通常不应该被直接点击
+            return false
+        }
+    }
+    
+    /**
+     * 检查视图是否有实际的点击监听器
+     * @param view 要检测的视图
+     * @return 是否有点击监听器
+     */
+    private fun hasActualClickListener(view: View): Boolean {
+        try {
+            val hasOnClickListenersMethod = View::class.java.getDeclaredMethod("hasOnClickListeners")
+            hasOnClickListenersMethod.isAccessible = true
+            return hasOnClickListenersMethod.invoke(view) as Boolean
+        } catch (e: Exception) {
+            // 如果反射失败，假设有监听器（保守策略）
+            return true
+        }
+    }
+    
+    /**
+     * 检查是否为特殊的可点击容器
+     * 某些容器虽然没有直接的点击监听器，但仍然应该被认为是可点击的
+     * @param view 要检测的视图
+     * @return 是否为特殊可点击容器
+     */
+    private fun isSpecialClickableContainer(view: View): Boolean {
+        val parent = view.parent
+        
+        // 对于ListView本身，需要检查是否真的有点击监听器
+        if (view is ListView) {
+            // ListView本身通常不应该被认为是可点击的，除非明确设置了OnItemClickListener
+            try {
+                val onItemClickListenerField = ListView::class.java.getDeclaredField("mOnItemClickListener")
+                onItemClickListenerField.isAccessible = true
+                val listener = onItemClickListenerField.get(view)
+                return listener != null
+            } catch (e: Exception) {
+                // 如果反射失败，保守地返回false
+                return false
+            }
+        }
+        
+        // 检查是否为 ListView 中的项目容器（直接子项）
+        if (parent is ListView) {
+            // ListView 中的直接子项通常是可点击的
+            return true
+        }
+        
+        // 检查是否为 RecyclerView 中的项目容器
+        if (parent != null && parent.javaClass.name.contains("RecyclerView")) {
+            return true
+        }
+        
+        // 检查是否为具有特定类名的可点击容器
+        val className = view.javaClass.simpleName
+        if (className.contains("Item") || className.contains("Row") || className.contains("Cell")) {
+            return view.isClickable
+        }
+        
+        // 对于 LinearLayout 等容器，如果在 ListView 中且设置了 clickable，需要进一步验证
+        if (view is LinearLayout || view is RelativeLayout || view is FrameLayout) {
+            // 检查父容器链中是否有 ListView 或 RecyclerView
+            var currentParent = view.parent
+            var depth = 0
+            while (currentParent != null && depth < 5) { // 限制检查深度避免无限循环
+                if (currentParent is ListView || 
+                    currentParent.javaClass.name.contains("RecyclerView")) {
+                    // 在列表容器中的布局容器，如果没有实际监听器，通常不应该被认为是可点击的
+                    return false
+                }
+                currentParent = currentParent.parent
+                depth++
+            }
+        }
+        
+        return view.isClickable
+    }
+    
+    /**
+     * 备用的 clickable 检测方法
+     * 当反射方法失败时使用
+     * @param view 要检测的视图
+     * @return 是否可点击
+     */
+    private fun isClickableByFallbackMethod(view: View): Boolean {
+        // 对于某些已知的可点击控件类型，直接返回 true
+        when (view) {
+            is Button, is ImageButton -> return view.isClickable && view.isEnabled
+            is TextView -> {
+                // TextView 如果设置了 clickable 且有文本，通常是真正可点击的
+                return view.isClickable && view.text.isNotEmpty()
+            }
+            is ImageView -> {
+                // ImageView 如果设置了 clickable 且有图片，通常是真正可点击的
+                return view.isClickable && view.drawable != null
+            }
+        }
+        
+        // 对于容器类型，使用特殊检测逻辑
+        if (view is ViewGroup) {
+            return isSpecialClickableContainer(view)
+        }
+        
+        // 默认情况下，相信 isClickable 的结果，但要求视图必须是启用状态
+        return view.isClickable && view.isEnabled
     }
 }
