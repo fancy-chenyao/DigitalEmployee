@@ -126,17 +126,6 @@ def log_system_status():
     print("📁 文件日志: 启用")
     print("="*60)
 
-if __name__ == "__main__":
-    # 测试日志配置
-    setup_logging("DEBUG", True)
-    
-    log_system_status()
-    
-    # 测试不同级别的日志
-    log_with_color("这是一条调试信息", "blue", "DEBUG")
-    log_with_color("这是一条信息", "green", "INFO")
-    log_with_color("这是一条警告", "yellow", "WARNING")
-    log_with_color("这是一条错误", "red", "ERROR")
 
 
 

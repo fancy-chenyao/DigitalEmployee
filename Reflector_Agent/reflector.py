@@ -64,7 +64,7 @@ class Reflector:
         # 构建用户消息内容，包含人格信息、目标和执行步骤
         content_sections = [
             persona_content,
-            f"Error Type: {error_type}",
+            # f"Error Type: {error_type}",
             f"Error Message: {error_message}",
             f"Action: {action}",
             f"Memory Steps:\n{formatted_steps_str}",
