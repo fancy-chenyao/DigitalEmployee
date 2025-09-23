@@ -53,9 +53,20 @@ class MobileGPTSpeechRecognizer(private val context: Context) : TextToSpeech.OnI
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             // 在这里设置您的首选语言和其他TTS设置
-            // 设置语言为英语（美国）
-            mTts.language = Locale.US
-            // mTts.language = Locale.getDefault()
+            // 优先设置为中文普通话（简体）
+            val zhResult = mTts.setLanguage(Locale.SIMPLIFIED_CHINESE)
+            if (zhResult == TextToSpeech.LANG_MISSING_DATA || zhResult == TextToSpeech.LANG_NOT_SUPPORTED) {
+                // 尝试中国地区中文
+                val zhCn = mTts.setLanguage(Locale.CHINA)
+                if (zhCn == TextToSpeech.LANG_MISSING_DATA || zhCn == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    // 回退到系统默认语言
+                    mTts.language = Locale.getDefault()
+                }
+            }
+
+            // 可选：适当提高语速和音调，让中文更自然
+            mTts.setSpeechRate(1.0f)
+            mTts.setPitch(1.0f)
         } else {
             // 处理TTS初始化失败
         }
@@ -70,7 +81,7 @@ class MobileGPTSpeechRecognizer(private val context: Context) : TextToSpeech.OnI
         // 暂时改为 Toast 提示，并支持长文本与更长显示时间
         showEnhancedToast(text)
         // 保留原逻辑，后续恢复时只需改回：
-        // mTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_id")
+        mTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_id")
         if (needResponse) {
             sttOn = true
         }
