@@ -503,7 +503,7 @@ class MobileService : Service() {
             when (action) {
                 "speak" -> {
                     val content = args.get("message") as String
-                    // mSpeech.speak(content, false)
+                    mSpeech.speak(content, false)
                     return
                 }
                 "ask" -> {
@@ -546,7 +546,7 @@ class MobileService : Service() {
     private fun handleAsk(info: String, question: String) {
         Log.d(TAG, "Asking question: $question")
 //        mAskPopUp.setQuestion(info, question)
-//        mSpeech.speak(question, true)
+        mSpeech.speak(question, true)
 //        mAskPopUp.showPopUp()
     }
 

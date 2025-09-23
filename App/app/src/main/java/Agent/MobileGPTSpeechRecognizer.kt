@@ -3,12 +3,19 @@ package Agent
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.ViewGroup
+import android.widget.TextView
+import android.widget.Toast
+import android.graphics.drawable.GradientDrawable
 import java.util.Locale
 
 /**
  * MobileGPT语音识别器类
  */
-class MobileGPTSpeechRecognizer(mContext: Context) : TextToSpeech.OnInitListener {
+class MobileGPTSpeechRecognizer(private val context: Context) : TextToSpeech.OnInitListener {
     
     companion object;
 
@@ -22,7 +29,7 @@ class MobileGPTSpeechRecognizer(mContext: Context) : TextToSpeech.OnInitListener
     
     init {
         sttOn = false
-        mTts = TextToSpeech(mContext, this)
+        mTts = TextToSpeech(context, this)
         ttsListener = object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {
                 // TTS开始播放时的回调
@@ -60,9 +67,55 @@ class MobileGPTSpeechRecognizer(mContext: Context) : TextToSpeech.OnInitListener
      * @param needResponse 是否需要响应
      */
     fun speak(text: String, needResponse: Boolean) {
-        mTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_id")
+        // 暂时改为 Toast 提示，并支持长文本与更长显示时间
+        showEnhancedToast(text)
+        // 保留原逻辑，后续恢复时只需改回：
+        // mTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_id")
         if (needResponse) {
             sttOn = true
         }
+    }
+
+    /**
+     * 使用可多行且可延长显示时间的 Toast
+     */
+    private fun showEnhancedToast(message: String) {
+        val appCtx = context.applicationContext
+
+        // 自定义文本视图，支持多行换行显示
+        val tv = TextView(appCtx).apply {
+            text = message
+            setTextColor(0xFF222222.toInt())
+            textSize = 14f
+            setPadding(32, 24, 32, 24)
+            maxLines = 10
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            // 圆角背景
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 20f
+                setColor(0xF2FFFFFF.toInt()) // 半透明白色
+                setStroke(1, 0x22000000) // 细微描边
+            }
+        }
+
+        val toast = Toast(appCtx).apply {
+            view = tv
+            setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, 160)
+            duration = Toast.LENGTH_LONG
+        }
+
+        // 根据文本长度动态决定总显示时长（上限15s）
+        val totalDurationMs = (2000 + message.length * 80).coerceAtMost(15000)
+        val singleShowMs = 3500 // LENGTH_LONG 约 3.5s
+        val repeatTimes = kotlin.math.max(1, kotlin.math.ceil(totalDurationMs / singleShowMs.toDouble()).toInt())
+
+        val handler = Handler(Looper.getMainLooper())
+        fun showWithRepeat(timesLeft: Int) {
+            if (timesLeft <= 0) return
+            toast.show()
+            handler.postDelayed({ showWithRepeat(timesLeft - 1) }, singleShowMs.toLong())
+        }
+        showWithRepeat(repeatTimes)
     }
 }
