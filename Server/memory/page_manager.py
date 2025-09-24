@@ -7,14 +7,19 @@ from agents import param_fill_agent
 from utils.action_utils import adapt_action
 from log_config import log
 from utils.mongo_utils import load_dataframe, save_dataframe
+from utils.local_store import write_dataframe_csv, append_one_csv, read_dataframe_csv
 
 
 def init_database(collection: str, headers: list):
+    from env_config import Config
+    if not Config.ENABLE_DB:
+        return read_dataframe_csv(collection, headers)
     return load_dataframe(collection, headers)
 
 
 class PageManager:
-    def __init__(self,  page_index):
+    def __init__(self, task_name: str, page_index: int):
+        self.task_name = task_name
         self.page_index = page_index
 
 
@@ -42,6 +47,7 @@ class PageManager:
     def add_new_action(self, new_action):
         self.available_subtask_db = pd.concat([self.available_subtask_db, pd.DataFrame([new_action])], ignore_index=True)
         save_dataframe(self.available_subtask_db_path, self.available_subtask_db)
+        write_dataframe_csv(self.available_subtask_db_path, self.available_subtask_db, task_name=self.task_name, page_index=self.page_index)
 
     def save_subtask(self, subtask_raw: dict, example: dict):
         # 检查是否已存在
@@ -58,6 +64,7 @@ class PageManager:
         # 使用批量操作优化
         from utils.mongo_utils import append_one
         append_one(self.subtask_db_path, subtask_data)
+        append_one_csv(self.subtask_db_path, subtask_data, task_name=self.task_name, page_index=self.page_index)
         
         # 更新内存中的DataFrame
         new_row = pd.DataFrame([subtask_data])
@@ -84,6 +91,7 @@ class PageManager:
         # 使用批量操作优化
         from utils.mongo_utils import append_one
         append_one(self.action_db_path, new_action_db)
+        append_one_csv(self.action_db_path, new_action_db, task_name=self.task_name, page_index=self.page_index)
 
         # 更新内存中的DataFrame
         new_row = pd.DataFrame([new_action_db])
@@ -139,6 +147,7 @@ class PageManager:
             self.subtask_db.loc[condition, 'parameters'] = json.dumps(subtask['parameters'])
 
             save_dataframe(self.subtask_db_path, self.subtask_db)
+            write_dataframe_csv(self.subtask_db_path, self.subtask_db, task_name=self.task_name, page_index=self.page_index)
 
     def merge_subtask_into(self, base_subtask_name, prev_subtask_name, target_subtask_name):
         actions = self.action_db.to_dict(orient="records")
@@ -159,6 +168,7 @@ class PageManager:
 
         self.action_db = pd.DataFrame(actions)
         save_dataframe(self.action_db_path, self.action_db)
+        write_dataframe_csv(self.action_db_path, self.action_db, task_name=self.task_name, page_index=self.page_index)
     def delete_subtask(self, subtask_name):
         """
         仅根据子任务名称删除数据
@@ -172,6 +182,7 @@ class PageManager:
             self.subtask_db = self.subtask_db[~subtask_condition]
             # 持久化到CSV
             save_dataframe(self.subtask_db_path, self.subtask_db)
+            write_dataframe_csv(self.subtask_db_path, self.subtask_db, task_name=self.task_name, page_index=self.page_index)
             log(f"已删除子任务: {subtask_name} (共 {subtask_condition.sum()} 条记录)", "blue")
         else:
             log(f"未找到名称为 {subtask_name} 的子任务", "yellow")

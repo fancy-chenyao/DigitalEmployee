@@ -15,10 +15,14 @@ from utils.mongo_utils import check_connection
 from utils.action_utils import generalize_action
 from utils.utils import get_openai_embedding, log, safe_literal_eval, cosine_similarity
 from utils.mongo_utils import load_dataframe, save_dataframe
+from utils.local_store import write_dataframe_csv, read_dataframe_csv
+from utils.local_store import write_dataframe_csv
 
 
 def init_database(path: str, headers: list, use_cache: bool = True):
-    # path 参数原先为 CSV 路径，这里改为集合名以保持调用处最小改动
+    # 当 DB 关闭时，优先从本地 CSV 读取；否则走 Mongo 集合
+    if not Config.ENABLE_DB:
+        return read_dataframe_csv(path, headers)
     return load_dataframe(path, headers, use_cache=use_cache)
 
 
@@ -65,7 +69,7 @@ class Memory:
 
     def init_page_manager(self, page_index: int):
         if page_index not in self.page_managers:
-            self.page_managers[page_index] = PageManager( page_index)
+            self.page_managers[page_index] = PageManager(self.task_name, page_index)
 
         self.page_manager = self.page_managers[page_index]
 
@@ -108,16 +112,20 @@ class Memory:
         # 将更新后的页面信息保存到 MongoDB 集合
         self.page_db = pd.concat([self.page_db, pd.DataFrame([new_row])], ignore_index=True)
         save_dataframe(self.page_path, self.page_db)
+        write_dataframe_csv(self.page_path, self.page_db, task_name=self.task_name)
 
         # 根据配置与连通性：优先写入数据库；不可用时不写DB，保留本地文件
         try:
             if Config.ENABLE_DB and check_connection():
                 parsing_utils.save_screen_info_to_mongo(self.task_name, new_index, screen_num)
             else:
-                # DB 关闭或不可达：跳过DB写入，依赖 xmlEncoder 已经写好的本地文件
-                pass
+                # 本地保存（与 Server_origin 对齐）：memory/log/<task>/pages/<index>/screen/
+                try:
+                    parsing_utils.save_screen_info_local_aligned(self.task_name, new_index, screen_num)
+                except Exception:
+                    pass
         except Exception:
-            # 任何异常都不阻断主流程，保底仍保留本地文件
+            # 任何异常都不阻断主流程
             pass
 
         return new_index
@@ -141,6 +149,7 @@ class Memory:
 
         self.page_db.loc[page_index] = updated_row
         save_dataframe(self.page_path, self.page_db)
+        write_dataframe_csv(self.page_path, self.page_db, task_name=self.task_name)
 
         # available_subtasks 的持久化由 PageManager 负责到 MongoDB，不再写 CSV
 
@@ -153,6 +162,7 @@ class Memory:
         hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
         hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
         save_dataframe(self.screen_hierarchy_path, hierarchy_db)
+        write_dataframe_csv(self.screen_hierarchy_path, hierarchy_db, task_name=self.task_name)
 
         self.hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
@@ -289,6 +299,7 @@ class Memory:
             self.task_db = pd.concat([self.task_db, pd.DataFrame([new_task_path])], ignore_index=True)
         # 将更新后的任务库写入 MongoDB
         save_dataframe(self.task_db_path, self.task_db)
+        write_dataframe_csv(self.task_db_path, self.task_db, task_name=self.task_name)
         log(f":::TASK SAVE::: Path saved: {new_task_path}")
 
     def save_task_path(self, new_task_path: dict):
@@ -391,6 +402,7 @@ class Memory:
                 page_data['available_subtasks'] = json.dumps(available_subtasks)
                 self.page_db.loc[page_index] = page_data
                 save_dataframe(self.page_path, self.page_db)
+                write_dataframe_csv(self.page_path, self.page_db, task_name=self.task_name)
 
                 self.page_managers[page_index].update_subtask_info(merged_subtask_dict)
 

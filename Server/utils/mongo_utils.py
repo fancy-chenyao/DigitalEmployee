@@ -62,7 +62,11 @@ def get_db():
 
 
 def load_dataframe(collection_name: str, columns: List[str], use_cache: bool = True) -> pd.DataFrame:
-    """加载DataFrame，使用智能缓存优化"""
+    """加载DataFrame，使用智能缓存优化；当 ENABLE_DB=False 时改用本地CSV。"""
+    # 本地模式：直接读CSV
+    if not Config.ENABLE_DB:
+        from utils.local_store import read_dataframe_csv
+        return read_dataframe_csv(collection_name, columns)
     # 使用缓存键
     cache_key = f"dataframe_{collection_name}_{hash(tuple(columns))}"
     
@@ -106,7 +110,18 @@ def load_dataframe(collection_name: str, columns: List[str], use_cache: bool = T
 
 
 def save_dataframe(collection_name: str, df: pd.DataFrame, batch_size: int = 1000) -> None:
-    """保存DataFrame，使用批量操作优化"""
+    """保存DataFrame；当 ENABLE_DB=False 时改用本地CSV。
+    注意：为避免生成平铺文件，以下集合在本地模式下不在此处写入：
+      - 以 page_ 开头的集合（由 PageManager 负责写入 pages/<index>/ 下的 CSV）
+      - tasks / pages / hierarchy（由 Memory 负责按任务目录写入）
+    其他集合（如 global_tasks）仍按全局写入 memory/log/<collection>.csv。
+    """
+    if not Config.ENABLE_DB:
+        if collection_name.startswith("page_") or collection_name in ("tasks", "pages", "hierarchy"):
+            return
+        from utils.local_store import write_dataframe_csv
+        write_dataframe_csv(collection_name, df)
+        return
     db = get_db()
     collection = db[collection_name]
     
@@ -133,7 +148,15 @@ def save_dataframe(collection_name: str, df: pd.DataFrame, batch_size: int = 100
 
 
 def append_one(collection_name: str, doc: dict) -> None:
-    """插入单条记录"""
+    """插入单条记录；当 ENABLE_DB=False 时改用本地CSV。
+    为避免生成平铺文件：以 page_ 开头的集合在此处不写，由调用方传 task/page 定位写入。
+    """
+    if not Config.ENABLE_DB:
+        if collection_name.startswith("page_"):
+            return
+        from utils.local_store import append_one_csv
+        append_one_csv(collection_name, doc)
+        return
     db = get_db()
     db[collection_name].insert_one(doc)
     clear_cache_for_collection(collection_name)
@@ -156,14 +179,52 @@ def append_many(collection_name: str, docs: List[dict], batch_size: int = 1000) 
 
 
 def upsert_one(collection_name: str, filter_doc: dict, doc: dict) -> None:
-    """更新或插入单条记录"""
+    """更新或插入单条记录；当 ENABLE_DB=False 时改用本地CSV。"""
+    if not Config.ENABLE_DB:
+        if collection_name.startswith("page_") or collection_name in ("tasks", "pages", "hierarchy"):
+            return
+        from utils.local_store import read_dataframe_csv, write_dataframe_csv
+        headers = list(set(list(doc.keys()) + list(filter_doc.keys())))
+        df = read_dataframe_csv(collection_name, headers)
+        if not df.empty:
+            mask = pd.Series([True] * len(df))
+            for k, v in filter_doc.items():
+                if k in df.columns:
+                    mask &= (df[k] != v)
+            df = df[mask]
+        df = pd.concat([df, pd.DataFrame([doc])], ignore_index=True)
+        write_dataframe_csv(collection_name, df)
+        return
     db = get_db()
     db[collection_name].replace_one(filter_doc, doc, upsert=True)
     clear_cache_for_collection(collection_name)
 
 
 def upsert_many(collection_name: str, operations: List[dict], batch_size: int = 1000) -> None:
-    """批量更新或插入记录"""
+    """批量更新或插入记录；当 ENABLE_DB=False 时改用本地CSV。"""
+    if not Config.ENABLE_DB:
+        if collection_name.startswith("page_") or collection_name in ("tasks", "pages", "hierarchy"):
+            return
+        from utils.local_store import read_dataframe_csv, write_dataframe_csv
+        if not operations:
+            return
+        headers: List[str] = []
+        for op in operations:
+            headers += list(op.get('filter', {}).keys()) + list(op.get('document', {}).keys())
+        headers = list(dict.fromkeys(headers))
+        df = read_dataframe_csv(collection_name, headers)
+        for op in operations:
+            f = op.get('filter', {})
+            d = op.get('document', {})
+            if not df.empty and f:
+                mask = pd.Series([True] * len(df))
+                for k, v in f.items():
+                    if k in df.columns:
+                        mask &= (df[k] != v)
+                df = df[mask]
+            df = pd.concat([df, pd.DataFrame([d])], ignore_index=True)
+        write_dataframe_csv(collection_name, df)
+        return
     if not operations:
         return
     

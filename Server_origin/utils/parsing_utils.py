@@ -5,9 +5,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
-from log_config import log
-from env_config import Config
-from utils.local_store import get_screen_bundle_dir
+from utils.utils import log
 
 
 def find_parent_node(root, child_index: int) -> (int, ET):
@@ -292,123 +290,38 @@ def find_element_by_depth_and_rank(element, target_depth, rank, current_depth=1)
     return None
 
 
-def save_screen_info_local(task_name: str, dest_dir: str, screen_num: int | None = None) -> None:
-    """
-    将最近一次会话日志中的截图与各类XML文件拷贝到指定目录，便于后续训练/排查。
+def save_screen_info(app_name: str, task_name: str, dest_dir: str, screen_num=None) -> None:
+    def parse_datetime(dirname):
+        return datetime.strptime(dirname, "%Y_%m_%d_%H-%M-%S")
 
-    源目录结构（与本项目一致）：
-      Config.LOG_DIRECTORY/<task_name>/<timestamp>/
-        - screenshots/<index>.jpg
-        - xmls/
-            <index>.xml               # raw
-            <index>_encoded.xml       # encoded
-            <index>_hierarchy_parsed.xml
-            <index>_parsed.xml
-            <index>_pretty.xml
+    def get_index(filename):
+        base = os.path.basename(filename)
+        index = int(base.split('.')[0])
+        return index
 
-    目标目录：
-      dest_dir/
-        screenshot.jpg
-        raw.xml
-        html.xml
-        hierarchy.xml
-        parsed.xml
-        pretty.xml
-    """
-    import os
-    import shutil
-    from datetime import datetime
+    base_path = f'memory/log/{app_name}/{task_name}/'
 
-    def parse_ts(name: str):
-        # 兼容下划线与横杠分隔的时间戳目录
-        try:
-            return datetime.strptime(name, "%Y_%m_%d_%H-%M-%S")
-        except Exception:
-            try:
-                return datetime.strptime(name, "%Y_%m_%d %H:%M:%S")
-            except Exception:
-                return None
+    directories = next(os.walk(base_path))[1]
 
-    base_path = os.path.join(Config.LOG_DIRECTORY, task_name)
-    if not os.path.isdir(base_path):
-        return
+    datetime_directories = [(parse_datetime(dir), dir) for dir in directories]
 
-    # 选择最新的时间戳目录
-    subdirs = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
-    dated = []
-    for d in subdirs:
-        dt = parse_ts(d)
-        if dt is not None:
-            dated.append((dt, d))
-    if not dated:
-        return
-    dated.sort(reverse=True)
-    latest_dir = dated[0][1]
+    datetime_directories.sort(reverse=True)  # Newest first
 
-    shots_dir = os.path.join(base_path, latest_dir, "screenshots")
-    xmls_dir = os.path.join(base_path, latest_dir, "xmls")
-    if not os.path.isdir(xmls_dir):
-        return
+    most_recent_log_dir = datetime_directories[0][1]
+    most_recent_screenshot_path = os.path.join(base_path, most_recent_log_dir, "screenshots")
+    most_recent_xml_path = os.path.join(base_path, most_recent_log_dir, "xmls")
 
-    # 选择索引
-    def get_index_from_filename(fname: str) -> int | None:
-        name, _ = os.path.splitext(fname)
-        try:
-            return int(name)
-        except Exception:
-            return None
-
-    index = None
+    files = [f for f in os.listdir(most_recent_screenshot_path) if f.endswith('.jpg')]
+    indices = [get_index(file) for file in files]
     if screen_num is not None:
         index = screen_num
     else:
-        # 优先根据截图确定最新索引
-        shot_indices = []
-        if os.path.isdir(shots_dir):
-            for f in os.listdir(shots_dir):
-                if f.lower().endswith('.jpg'):
-                    idx = get_index_from_filename(f)
-                    if idx is not None:
-                        shot_indices.append(idx)
-        if shot_indices:
-            index = max(shot_indices)
-        else:
-            # 回退：根据原始xml文件确定
-            xml_indices = []
-            for f in os.listdir(xmls_dir):
-                if f.lower().endswith('.xml') and '_' not in f:
-                    idx = get_index_from_filename(f)
-                    if idx is not None:
-                        xml_indices.append(idx)
-            if xml_indices:
-                index = max(xml_indices)
-            else:
-                index = 0
+        index = max(indices) if indices else None  # Check if the list is not empty
 
-    os.makedirs(dest_dir, exist_ok=True)
-
-    # 复制文件（存在则复制）
-    def try_copy(src: str, dst: str):
-        try:
-            if os.path.exists(src):
-                shutil.copy(src, dst)
-        except Exception:
-            pass
-
-    # screenshot
-    try_copy(os.path.join(shots_dir, f"{index}.jpg"), os.path.join(dest_dir, "screenshot.jpg"))
-    # xml variants
-    try_copy(os.path.join(xmls_dir, f"{index}.xml"), os.path.join(dest_dir, "raw.xml"))
-    try_copy(os.path.join(xmls_dir, f"{index}_encoded.xml"), os.path.join(dest_dir, "html.xml"))
-    try_copy(os.path.join(xmls_dir, f"{index}_hierarchy_parsed.xml"), os.path.join(dest_dir, "hierarchy.xml"))
-    try_copy(os.path.join(xmls_dir, f"{index}_parsed.xml"), os.path.join(dest_dir, "parsed.xml"))
-    try_copy(os.path.join(xmls_dir, f"{index}_pretty.xml"), os.path.join(dest_dir, "pretty.xml"))
-
-
-def save_screen_info_local_aligned(task_name: str, page_index: int, screen_num: int | None = None) -> None:
-    """
-    与 Server_origin 对齐的落盘路径：memory/log/<task>/pages/<index>/screen/
-    """
-    screen_dir = get_screen_bundle_dir(task_name, page_index)
-    save_screen_info_local(task_name, screen_dir, screen_num)
-
+    shutil.copy(os.path.join(most_recent_screenshot_path, f"{index}.jpg"), os.path.join(dest_dir, "screenshot.jpg"))
+    shutil.copy(os.path.join(most_recent_xml_path, f"{index}.xml"), os.path.join(dest_dir, "raw.xml"))
+    shutil.copy(os.path.join(most_recent_xml_path, f"{index}_encoded.xml"), os.path.join(dest_dir, "html.xml"))
+    shutil.copy(os.path.join(most_recent_xml_path, f"{index}_hierarchy_parsed.xml"),
+                os.path.join(dest_dir, "hierarchy.xml"))
+    shutil.copy(os.path.join(most_recent_xml_path, f"{index}_parsed.xml"), os.path.join(dest_dir, "parsed.xml"))
+    shutil.copy(os.path.join(most_recent_xml_path, f"{index}_pretty.xml"), os.path.join(dest_dir, "pretty.xml"))

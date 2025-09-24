@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from copy import deepcopy
 
 from utils import parsing_utils
-from log_config import log
+from utils.utils import log
 
 
 def generalize_action(action: dict, subtask: dict, screen) -> dict:
@@ -25,13 +25,8 @@ def adapt_action(action: dict, screen: str, subtask_args: dict) -> dict:
     if 'index' in action['parameters']:
         # 第一步：基于子任务参数适配（替换占位符为具体业务值）
         adapted_action = adapt_action_to_arguments(action, subtask_args)
-        log(f"action: {action}", "blue")
-        log(f"subtask_args: {subtask_args}", "blue")
-        log(f"adapted_action: {adapted_action}", "blue")
         # 第二步：基于当前界面适配（找到当前界面中匹配模板的元素，确定新的indjiangex）
         adapted_action = adapt_action_to_screen(adapted_action, screen)
-        log(f"screen: {screen}", "blue")
-        log(f"adapted_action: {adapted_action}", "blue")
         return adapted_action # 返回可执行的具体动作
     else:
         return action  # 无index的动作无需适配
