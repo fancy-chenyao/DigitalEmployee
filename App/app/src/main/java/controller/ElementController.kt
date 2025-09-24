@@ -66,51 +66,18 @@ object ElementController {
             if (view != null && view.isClickable && view.isEnabled) {
                 Log.d(TAG, "开始执行view引用点击操作")
                 
-                // 使用Handler确保回调一定会被执行
-                val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                var callbackExecuted = false
-                
-                // 设置超时处理，如果3秒内没有执行回调，则认为失败
-                val timeoutRunnable = Runnable {
-                    if (!callbackExecuted) {
-                        callbackExecuted = true
-                        Log.w(TAG, "view.post点击操作超时，执行失败回调")
-                        callback(false)
-                    }
-                }
-                handler.postDelayed(timeoutRunnable, 3000)
-                
                 // 在主线程中执行点击操作
-                val postResult = view.post {
+                view.post {
                     try {
-                        if (!callbackExecuted) {
-                            Log.d(TAG, "执行view.performClick()")
-                            val success = view.performClick()
-                            callbackExecuted = true
-                            handler.removeCallbacks(timeoutRunnable)
-                            Log.d(TAG, "view.performClick()结果: $success")
-                            callback(success)
-                        }
+                        Log.d(TAG, "执行view.performClick()")
+                        view.performClick()
+                        Log.d(TAG, "view.performClick()结果: true")
+                        callback(true)
                     } catch (e: Exception) {
-                        if (!callbackExecuted) {
-                            callbackExecuted = true
-                            handler.removeCallbacks(timeoutRunnable)
-                            Log.e(TAG, "点击操作失败: ${e.message}")
-                            callback(false)
-                        }
-                    }
-                }
-                
-                // 如果view.post返回false，说明无法将任务添加到消息队列
-                if (!postResult) {
-                    if (!callbackExecuted) {
-                        callbackExecuted = true
-                        handler.removeCallbacks(timeoutRunnable)
-                        Log.w(TAG, "view.post返回false，无法添加到消息队列")
+                        Log.e(TAG, "点击操作失败: ${e.message}")
                         callback(false)
                     }
                 }
-                
             } else {
                 Log.w(TAG, "View不可点击或不可用: view=${view}, clickable=${view?.isClickable}, enabled=${view?.isEnabled}")
                 callback(false)
@@ -120,6 +87,7 @@ object ElementController {
             callback(false)
         }
     }
+
     fun clickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
         // 使用NativeController的坐标点击功能
         when (PageSniffer.getCurrentPageType(activity)) {

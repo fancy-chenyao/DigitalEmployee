@@ -628,13 +628,32 @@ class MobileService : Service() {
     /**
      * 执行点击动作
      * 优先使用GenericElement中的view引用进行直接点击，提高点击成功率和性能
-     * 添加点击成功验证机制，确保点击真正生效
+     * 利用现有的页面变化监听机制来判断点击是否成功
      */
     private fun executeClickAction(activity: Activity, element: GenericElement) {
         Log.d(TAG, "开始执行点击动作 - 元素: ${element.resourceId}, clickable: ${element.clickable}, enabled: ${element.enabled}")
         
-        // 记录点击前的屏幕状态，用于验证点击是否成功
-        val preClickScreenHash = getCurrentScreenHash(activity)
+        // 记录点击前的状态
+        val preClickActivity = ActivityTracker.getCurrentActivity()
+        val preClickActivityName = preClickActivity?.javaClass?.simpleName ?: "null"
+        val preClickMonitoredActivity = currentMonitoredActivity
+        var preClickViewTreeHash: Int? = null
+        
+        // 获取点击前页面元素树的哈希值
+        preClickActivity?.let { clickActivity ->
+            try {
+                val rootView = clickActivity.window?.decorView?.rootView
+                preClickViewTreeHash = if (rootView != null) {
+                    getViewTreeHash(rootView)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "获取点击前视图树哈希值失败", e)
+            }
+        }
+        
+        Log.d(TAG, "记录点击前状态 - Activity: $preClickActivityName, 监听Activity: ${preClickMonitoredActivity?.javaClass?.simpleName}, 视图树哈希: $preClickViewTreeHash")
         
         // 首先检查目标元素是否可点击
         if (element.clickable && element.enabled) {
@@ -643,21 +662,22 @@ class MobileService : Service() {
                 Log.d(TAG, "使用view引用进行直接点击")
                 ElementController.clickElementByView(element) { success ->
                     if (success) {
-                        Log.d(TAG, "view引用点击操作返回成功，验证点击效果...")
-                        // 验证点击是否真正生效
-                        verifyClickSuccess(activity, preClickScreenHash) { verified ->
+                        Log.d(TAG, "view引用点击操作返回成功，等待页面变化验证...")
+                        screenNeedUpdate = true
+                        xmlPending = true
+                        // 利用现有的页面变化监听机制来验证点击效果
+                        verifyClickSuccessWithPageChange(preClickActivity, preClickMonitoredActivity, preClickViewTreeHash) { verified ->
                             if (verified) {
                                 Log.d(TAG, "通过view引用点击成功且已验证生效")
-                                screenNeedUpdate = true
-                                xmlPending = true
+                                
                             } else {
                                 Log.w(TAG, "view引用点击操作成功但未生效，回退到传统方式")
-                                fallbackClickAction(activity, element, preClickScreenHash)
+                                fallbackClickAction(activity, element, preClickActivity, preClickMonitoredActivity, preClickViewTreeHash)
                             }
                         }
                     } else {
                         Log.w(TAG, "通过view引用点击失败，回退到传统方式")
-                        fallbackClickAction(activity, element, preClickScreenHash)
+                        fallbackClickAction(activity, element, preClickActivity, preClickMonitoredActivity, preClickViewTreeHash)
                     }
                 }
             } else {
@@ -665,13 +685,14 @@ class MobileService : Service() {
                 // 没有view引用时使用传统方式
                 ElementController.clickElement(activity, element.resourceId) { success ->
                     if (success) {
-                        Log.d(TAG, "传统点击操作返回成功，验证点击效果...")
-                        // 验证点击是否真正生效
-                        verifyClickSuccess(activity, preClickScreenHash) { verified ->
+                        screenNeedUpdate = true
+                        xmlPending = true
+                        Log.d(TAG, "传统点击操作返回成功，等待页面变化验证...")
+                        // 利用现有的页面变化监听机制来验证点击效果
+                        verifyClickSuccessWithPageChange(preClickActivity, preClickMonitoredActivity, preClickViewTreeHash) { verified ->
                             if (verified) {
                                 Log.d(TAG, "传统点击成功且已验证生效")
-                                screenNeedUpdate = true
-                                xmlPending = true
+                                
                             } else {
                                 Log.w(TAG, "传统点击操作成功但未生效，回退到坐标点击")
                                 executeCoordinateClick(activity, element)
@@ -691,21 +712,33 @@ class MobileService : Service() {
 
     /**
      * 传统的点击操作回退方法
-     * 添加屏幕状态验证机制
+     * 利用页面变化监听机制验证点击效果
+     * @param activity 当前Activity
+     * @param element 目标元素
+     * @param preClickActivity 点击前的Activity
+     * @param preClickMonitoredActivity 点击前监听的Activity
+     * @param preClickViewTreeHash 点击前页面元素树的哈希值
      */
-    private fun fallbackClickAction(activity: Activity, element: GenericElement, preClickScreenHash: String) {
+    private fun fallbackClickAction(
+        activity: Activity, 
+        element: GenericElement,
+        preClickActivity: Activity?,
+        preClickMonitoredActivity: Activity?,
+        preClickViewTreeHash: Int?
+    ) {
         // 首先检查目标元素是否可点击
         if (element.clickable && element.enabled) {
             // 目标元素可点击，直接执行
             ElementController.clickElement(activity, element.resourceId) { success ->
                 if (success) {
-                    Log.d(TAG, "传统回退点击操作返回成功，验证点击效果...")
-                    // 验证点击是否真正生效
-                    verifyClickSuccess(activity, preClickScreenHash) { verified ->
+                    Log.d(TAG, "传统回退点击操作返回成功，等待页面变化验证...")
+                    screenNeedUpdate = true
+                    xmlPending = true
+                    // 利用现有的页面变化监听机制来验证点击效果
+                    verifyClickSuccessWithPageChange(preClickActivity, preClickMonitoredActivity, preClickViewTreeHash) { verified ->
                         if (verified) {
                             Log.d(TAG, "传统回退点击成功且已验证生效")
-                            screenNeedUpdate = true
-                            xmlPending = true
+                            
                         } else {
                             Log.w(TAG, "传统回退点击操作成功但未生效，使用坐标点击")
                             executeCoordinateClick(activity, element)
@@ -740,17 +773,90 @@ class MobileService : Service() {
     }
 
     /**
-     * 验证点击是否成功
-     * 通过比较点击前后的屏幕状态来判断
+     * 利用页面变化监听机制验证点击效果
+     * 通过监听Activity变化和页面元素树变化来判断点击是否生效
+     * @param preClickActivity 点击前的Activity
+     * @param preClickMonitoredActivity 点击前监听的Activity
+     * @param preClickViewTreeHash 点击前页面元素树的哈希值
+     * @param callback 验证结果回调
      */
-    private fun verifyClickSuccess(activity: Activity, preClickScreenHash: String, callback: (Boolean) -> Unit) {
-        // 等待一段时间让界面响应
-        Handler(Looper.getMainLooper()).postDelayed({
-            val postClickScreenHash = getCurrentScreenHash(activity)
-            val hasChanged = preClickScreenHash != postClickScreenHash
-            Log.d(TAG, "点击验证结果: 屏幕状态${if (hasChanged) "已改变" else "未改变"}")
-            callback(hasChanged)
-        }, 500) // 等待500ms
+    private fun verifyClickSuccessWithPageChange(
+        preClickActivity: Activity?,
+        preClickMonitoredActivity: Activity?,
+        preClickViewTreeHash: Int?,
+        callback: (Boolean) -> Unit
+    ) {
+        var verificationCompleted = false
+        val startTime = System.currentTimeMillis()
+        
+        // 使用传入的点击前状态
+        val initialActivity = preClickActivity
+        val initialActivityName = initialActivity?.javaClass?.simpleName ?: "null"
+        val initialMonitoredActivity = preClickMonitoredActivity
+        val initialViewTreeHash = preClickViewTreeHash
+        
+        Log.d(TAG, "开始页面变化验证 - 点击前状态: Activity=$initialActivityName, 监听Activity=${initialMonitoredActivity?.javaClass?.simpleName}, 视图树哈希=${initialViewTreeHash}")
+        
+        // 创建一个检查器，定期检查页面状态变化
+        val checkPageChangeRunnable = object : Runnable {
+            override fun run() {
+                if (verificationCompleted) return
+                
+                val currentTime = System.currentTimeMillis()
+                val elapsed = currentTime - startTime
+                val currentActivity = ActivityTracker.getCurrentActivity()
+                val currentActivityName = currentActivity?.javaClass?.simpleName ?: "null"
+                
+                // 检查Activity变化
+                val hasActivityChange = currentActivity != initialActivity
+                
+                // 检查监听Activity变化
+                val hasMonitoredActivityChange = currentMonitoredActivity != initialMonitoredActivity
+                
+                // 检查页面元素树变化
+                var hasViewTreeChange = false
+                if (initialViewTreeHash != null && currentActivity != null) {
+                    try {
+                        val rootView = currentActivity.window?.decorView?.rootView
+                        if (rootView != null) {
+                            val currentViewTreeHash = getViewTreeHash(rootView)
+                            hasViewTreeChange = currentViewTreeHash != initialViewTreeHash
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "检查视图树变化时发生异常", e)
+                    }
+                }
+                
+                // 综合判断是否有页面变化
+                val hasPageChange = hasActivityChange || hasMonitoredActivityChange || hasViewTreeChange
+                
+                if (hasPageChange) {
+                    verificationCompleted = true
+                    
+                    val changeReason = when {
+                        hasActivityChange -> "Activity变化 ($initialActivityName -> $currentActivityName)"
+                        hasMonitoredActivityChange -> "监听Activity变化 (${initialMonitoredActivity?.javaClass?.simpleName} -> ${currentMonitoredActivity?.javaClass?.simpleName})"
+                        hasViewTreeChange -> "页面元素树变化"
+                        else -> "未知变化"
+                    }
+                    
+                    Log.d(TAG, "检测到页面变化，点击验证成功 - 变化原因: $changeReason")
+                    callback(true)
+                } else if (elapsed >= 1000) {
+                    // 超时，认为点击未生效
+                    verificationCompleted = true
+                    
+                    Log.d(TAG, "点击验证超时，未检测到页面变化 - 当前状态: Activity=$currentActivityName, 监听Activity=${currentMonitoredActivity?.javaClass?.simpleName}")
+                    callback(false)
+                } else {
+                    // 继续检查
+                    mainThreadHandler.postDelayed(this, 100) // 每150ms检查一次，提高响应速度
+                }
+            }
+        }
+        
+        // 开始检查
+        mainThreadHandler.postDelayed(checkPageChangeRunnable, 100) // 首次检查延迟100ms
     }
 
     /**
@@ -1048,7 +1154,11 @@ class MobileService : Service() {
         Log.d(TAG, "使用坐标点击 (dp): ($centerX dp, $centerY dp)")
         
         // 使用NativeController的坐标点击功能
-        ElementController.clickByCoordinateDp(activity,centerX.toFloat(),centerY.toFloat(),callback)
+        //
+//        ElementController.clickByCoordinateDp(activity,centerX.toFloat(),centerY.toFloat(),callback)
+        NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
+            callback(success)
+        }
     }
 
 
