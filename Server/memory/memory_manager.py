@@ -45,15 +45,24 @@ class Memory:
 
         log(f"📊 内存初始化: 任务='{task_name}', 指令='{instruction[:50]}...'", "blue")
 
-        # 使用缓存优化数据库查询
-        self.task_db = init_database(self.task_db_path, task_header, use_cache=True)
+        # 使用缓存优化数据库查询（本地模式按任务维度读取CSV）
+        if not Config.ENABLE_DB:
+            self.task_db = read_dataframe_csv(self.task_db_path, task_header, task_name=self.task_name)
+        else:
+            self.task_db = init_database(self.task_db_path, task_header, use_cache=True)
         log(f"📊 任务数据库加载: 任务数量={len(self.task_db)}", "cyan")
         
-        self.page_db = init_database(self.page_path, page_header, use_cache=True)
+        if not Config.ENABLE_DB:
+            self.page_db = read_dataframe_csv(self.page_path, page_header, task_name=self.task_name)
+        else:
+            self.page_db = init_database(self.page_path, page_header, use_cache=True)
         self.page_db.set_index('index', drop=False, inplace=True)
         log(f"📊 页面数据库加载: 页面数量={len(self.page_db)}", "cyan")
         
-        self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header, use_cache=True)
+        if not Config.ENABLE_DB:
+            self.hierarchy_db = read_dataframe_csv(self.screen_hierarchy_path, hierarchy_header, task_name=self.task_name)
+        else:
+            self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header, use_cache=True)
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
         log(f"📊 层级数据库加载: 层级数量={len(self.hierarchy_db)}", "cyan")
         
@@ -187,12 +196,29 @@ class Memory:
         # 构造层级数据（页面索引、XML、嵌入向量）
         new_screen_hierarchy = {'index': page_index, 'screen': screen, 'embedding': str(embedding)}
         # 写入界面层级库并重新加载（确保后续匹配可用）
-        hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
-        hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
+        if not Config.ENABLE_DB:
+            hierarchy_db = read_dataframe_csv(self.screen_hierarchy_path, ['index', 'screen', 'embedding'], task_name=self.task_name)
+        else:
+            hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
+        
+        # 若该 page_index 已存在，则更新；否则追加，保证“每个新页面一行”
+        if not hierarchy_db.empty and 'index' in hierarchy_db.columns and page_index in set(hierarchy_db['index'].tolist()):
+            try:
+                mask = (hierarchy_db['index'] == page_index)
+                hierarchy_db.loc[mask, 'screen'] = new_screen_hierarchy['screen']
+                hierarchy_db.loc[mask, 'embedding'] = new_screen_hierarchy['embedding']
+            except Exception:
+                hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
+        else:
+            hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
+        
         save_dataframe(self.screen_hierarchy_path, hierarchy_db)
         write_dataframe_csv(self.screen_hierarchy_path, hierarchy_db, task_name=self.task_name)
 
-        self.hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
+        if not Config.ENABLE_DB:
+            self.hierarchy_db = read_dataframe_csv(self.screen_hierarchy_path, ['index', 'screen', 'embedding'], task_name=self.task_name)
+        else:
+            self.hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
 
     def get_next_subtask(self, page_index, qa_history, screen):

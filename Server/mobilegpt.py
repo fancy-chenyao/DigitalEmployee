@@ -106,6 +106,12 @@ class MobileGPT:
                 pass
             self.memory.init_page_manager(page_index)
             self.current_page_index = page_index
+            try:
+                # 确保每个新页面的层级信息都被持久化（存在则更新，不存在则追加）
+                # 这样不依赖于是否走到了 Explore 分支
+                self.memory.add_hierarchy_xml(hierarchy_xml, page_index)
+            except Exception:
+                pass
             # 切到新页后再记录当前页缓冲概况
             try:
                 task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
