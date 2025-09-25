@@ -74,9 +74,26 @@ class PageManager:
     def get_next_subtask_data(self, subtask_name: str) -> dict:
         # Filter the subtask_db for rows matching the specific 'name'
         filtered_subtask = self.subtask_db[(self.subtask_db['name'] == subtask_name)]
-        next_subtask_data = filtered_subtask.iloc[0].to_dict()
-
-        return next_subtask_data
+        if filtered_subtask is not None and not filtered_subtask.empty:
+            next_subtask_data = filtered_subtask.iloc[0].to_dict()
+            return next_subtask_data
+        # 回退：若 subtasks.csv 无，尝试从 available_subtasks.csv 构造最小示例
+        try:
+            available = self.available_subtask_db[(self.available_subtask_db['name'] == subtask_name)]
+            if available is not None and not available.empty:
+                row = available.iloc[0].to_dict()
+                desc = row.get('description', '')
+                params = row.get('parameters', {})
+                if isinstance(params, str):
+                    try:
+                        params = json.loads(params)
+                    except Exception:
+                        params = {}
+                return {"name": subtask_name, "description": desc or "", "parameters": params or {}}
+        except Exception:
+            pass
+        # 最终兜底
+        return {"name": subtask_name, "description": "", "parameters": {}}
 
     def save_action(self, subtask_name, step: int, action: dict, example=None) -> None:
         if example is None:

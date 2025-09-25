@@ -416,7 +416,7 @@ class AsyncProcessor:
                 try:
                     db = get_db()
                     temp_xmls = db['temp_xmls']
-                    task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'session') or 'session'
+                    task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'untitled') or 'untitled'
                     screen_count = getattr(mobilegpt, '_screen_count', 0)
                     setattr(mobilegpt, '_screen_count', screen_count + 1)
                     docs = [
@@ -434,62 +434,27 @@ class AsyncProcessor:
                 except Exception:
                     pass
             else:
-                # 仅写本地
-                from screenParser.Encoder import xmlEncoder
-                from datetime import datetime
-                import os
-
-                screen_parser = xmlEncoder()
-                task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'session') or 'session'
-                # 复用会话时间戳目录
-                ts = getattr(mobilegpt, '_log_ts', None)
-                if not ts:
-                    ts = datetime.now().strftime("%Y_%m_%d_%H-%M-%S")
-                    setattr(mobilegpt, '_log_ts', ts)
-                log_dir = getattr(mobilegpt, '_log_dir', None)
-                if not log_dir:
-                    log_dir = os.path.join(Config.LOG_DIRECTORY, task_name, ts)
-                    setattr(mobilegpt, '_log_dir', log_dir)
-                screen_parser.init(log_dir)
-
-                xmls_dir = os.path.join(log_dir, 'xmls')
-                # 与截图 index 对齐：优先使用 screenshots 目录的最大索引
-                index = 0
-                try:
-                    screenshots_dir = os.path.join(log_dir, 'screenshots')
-                    shot_files = [f for f in os.listdir(screenshots_dir) if f.endswith('.jpg')]
-                    shot_nums = []
-                    for f in shot_files:
-                        try:
-                            shot_nums.append(int(os.path.splitext(f)[0]))
-                        except Exception:
-                            pass
-                    if shot_nums:
-                        index = max(shot_nums)
-                    else:
-                        # 回退：基于 xmls 目录已有的原始 xml 来确定索引
-                        existing = [f for f in os.listdir(xmls_dir) if f.endswith('.xml') and '_' not in f]
-                        xml_nums = []
-                        for f in existing:
-                            try:
-                                xml_nums.append(int(os.path.splitext(f)[0]))
-                            except Exception:
-                                pass
-                        index = max(xml_nums) if xml_nums else 0
-                except Exception:
-                    index = 0
-
-                # 先保存原始 XML
-                try:
-                    os.makedirs(xmls_dir, exist_ok=True)
-                    raw_path = os.path.join(xmls_dir, f"{index}.xml")
-                    with open(raw_path, 'w', encoding='utf-8') as f:
-                        f.write(xml_content)
-                except Exception:
-                    pass
-
-                # 生成并保存 parsed / hierarchy / encoded / pretty
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, index)
+                # 本地模式：不立即写盘，解析并缓存，待任务名可用后统一落盘
+                from screenParser import parseXML
+                import xml.etree.ElementTree as ET
+                parsed_xml = parseXML.parse(xml_content)
+                hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+                tree = ET.fromstring(parsed_xml)
+                for element in tree.iter():
+                    for k in ("bounds", "important", "class"):
+                        if k in element.attrib:
+                            del element.attrib[k]
+                encoded_xml = ET.tostring(tree, encoding='unicode')
+                # 缓存原始XML，供事后落盘
+                # 与截图对齐：使用最近一次截图的 index（_screen_count - 1）
+                current_count = getattr(mobilegpt, '_screen_count', 0)
+                screen_count = max(current_count - 1, 0)
+                buf = getattr(mobilegpt, '_local_buffer', None)
+                if buf is None:
+                    buf = {'xmls': [], 'shots': []}
+                    setattr(mobilegpt, '_local_buffer', buf)
+                buf['xmls'].append({'index': screen_count, 'xml': xml_content})
+                log(f"[buffer] xml queued idx={screen_count}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
             
             log(f"XML异步解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
@@ -534,7 +499,7 @@ class AsyncProcessor:
             from datetime import datetime
             import os, base64
 
-            task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'session') or 'session'
+            task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'untitled') or 'untitled'
             db_available = bool(Config.ENABLE_DB) and check_connection()
 
             # 统一递增 screen_count（与XML一致）
@@ -554,20 +519,14 @@ class AsyncProcessor:
                 except Exception:
                     pass
             else:
-                # 本地保存图片
-                ts = getattr(mobilegpt, '_log_ts', None)
-                if not ts:
-                    ts = datetime.now().strftime("%Y_%m_%d_%H-%M-%S")
-                    setattr(mobilegpt, '_log_ts', ts)
-                log_dir = getattr(mobilegpt, '_log_dir', None)
-                if not log_dir:
-                    log_dir = os.path.join(Config.LOG_DIRECTORY, task_name, ts)
-                    setattr(mobilegpt, '_log_dir', log_dir)
-                screenshots_dir = os.path.join(log_dir, 'screenshots')
-                os.makedirs(screenshots_dir, exist_ok=True)
-                file_path = os.path.join(screenshots_dir, f"{screen_count}.jpg")
-                with open(file_path, 'wb') as f:
-                    f.write(screenshot_data)
+                # 本地模式：不立即写盘，缓存截图；先自增，再把 index 分配给截图
+                buf = getattr(mobilegpt, '_local_buffer', None)
+                if buf is None:
+                    buf = {'xmls': [], 'shots': []}
+                    setattr(mobilegpt, '_local_buffer', buf)
+                buf['shots'].append({'index': screen_count, 'bytes': screenshot_data})
+                from log_config import log
+                log(f"[buffer] shot queued idx={screen_count}, size={len(screenshot_data)}, shots={len(buf['shots'])}", "blue")
 
             return {"status": "screenshot_processed", "data_size": len(screenshot_data), "session_id": session_id}
         except Exception as e:

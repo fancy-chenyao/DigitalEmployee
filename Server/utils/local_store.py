@@ -19,9 +19,10 @@ def _task_root(task_name: str) -> str:
 
 def read_dataframe_csv(collection_name: str, headers: list, task_name: str | None = None, page_index: int | None = None) -> pd.DataFrame:
     if task_name is None:
-        # global-level (rare) — keep under memory/log
+        # global-level（根级）。与 Server_origin 对齐：global_tasks → tasks.csv
         base = _csv_root()
-        file_path = os.path.join(base, f"{collection_name}.csv")
+        filename = "tasks.csv" if collection_name == "global_tasks" else f"{collection_name}.csv"
+        file_path = os.path.join(base, filename)
     else:
         # task-level
         task_dir = _task_root(task_name)
@@ -43,7 +44,12 @@ def read_dataframe_csv(collection_name: str, headers: list, task_name: str | Non
                 filename = file_map.get(collection_name, f"{collection_name}.csv")
                 file_path = os.path.join(page_dir, filename)
     if not os.path.exists(file_path):
-        return pd.DataFrame([], columns=headers)
+        df = pd.DataFrame([], columns=headers)
+        # 列补齐与顺序
+        for h in headers:
+            if h not in df.columns:
+                df[h] = None
+        return df[headers]
     try:
         df = pd.read_csv(file_path)
         # 确保列齐全且顺序稳定
@@ -52,7 +58,11 @@ def read_dataframe_csv(collection_name: str, headers: list, task_name: str | Non
                 df[h] = None
         return df[headers]
     except Exception:
-        return pd.DataFrame([], columns=headers)
+        df = pd.DataFrame([], columns=headers)
+        for h in headers:
+            if h not in df.columns:
+                df[h] = None
+        return df[headers]
 
 
 def write_dataframe_csv(collection_name: str, df: pd.DataFrame, task_name: str | None = None, page_index: int | None = None) -> None:
@@ -61,7 +71,8 @@ def write_dataframe_csv(collection_name: str, df: pd.DataFrame, task_name: str |
     try:
         if task_name is None:
             base = _csv_root()
-            file_path = os.path.join(base, f"{collection_name}.csv")
+            filename = "tasks.csv" if collection_name == "global_tasks" else f"{collection_name}.csv"
+            file_path = os.path.join(base, filename)
         else:
             task_dir = _task_root(task_name)
             if collection_name in ("tasks", "pages", "hierarchy"):
