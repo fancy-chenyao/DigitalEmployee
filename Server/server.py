@@ -668,7 +668,7 @@ class Server:
         # 获取必要的变量
         client_socket = session.client_socket
         mobileGPT = getattr(session, 'mobilegpt', None)
-        screen_count = getattr(session, 'screen_count', 0)
+        # screen_count = getattr(session, 'screen_count', 0)
         
         # 检查必要的依赖
         if not client_socket:
@@ -682,15 +682,14 @@ class Server:
         try:
             # 解析错误信息
             error_info = self._parse_error_message(error_content)
-            
-            # 如果有preXml，保存到MongoDB用于调试
-            if error_info.get('pre_xml'):
-                self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
+            screen_parser = xmlEncoder()
+            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
+            parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
 
-            
-                screen_parser = xmlEncoder()
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
-                parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
+            # 获取前一个界面的子任务列表和执行的子任务
+            page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+            available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
+            current_subtask = mobileGPT.current_subtask
 
             # 初始化AgentMemory
             self.agent_memory = AgentMemory(
@@ -699,10 +698,15 @@ class Server:
                 errMessage=error_info.get('error_message', 'No message'),
                 curXML=encoded_xml,
                 preXML=encoded_xml_pre,
-                action=error_info.get('action', 'None')
+                action=error_info.get('action', 'None'),
+                current_subtask=current_subtask,
+                available_subtasks=available_subtasks
             )
 
-            log(self.agent_memory, "blue")
+            log(self.agent_memory.instruction, "blue")
+            log(self.agent_memory.action, "blue")
+            log(f"当前子任务: {self.agent_memory.current_subtask}", "blue")
+            log(f"可用子任务: {self.agent_memory.available_subtasks}", "blue")
 
             # 调用Reflector进行反思分析
             reflector = Reflector(self.agent_memory)

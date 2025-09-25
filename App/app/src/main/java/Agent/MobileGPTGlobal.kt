@@ -7,8 +7,8 @@ class MobileGPTGlobal private constructor() {
     
     companion object {
         // 将此IP地址替换为服务器的IP地址
-        // const val HOST_IP = "198.18.0.1"
-        const val HOST_IP = "192.168.100.2"
+        const val HOST_IP = "198.18.0.1"
+//        const val HOST_IP = "192.168.100.2"
 //          const val HOST_IP = "192.168.100.56"
 //        const val HOST_IP = "192.168.96.177"
 //        const val HOST_IP = "198.18.0.1"

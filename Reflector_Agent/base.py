@@ -10,12 +10,15 @@ class AgentMemory:
     curXML: str
     preXML: str
     action: str
+    current_subtask: Optional[str] = None
+    available_subtasks: Optional[list[str]] = None
+
 
 
 @dataclass
 class Reflection:
     need_back: bool
-    problem_type: int
+    problem_type: str
     advice: Optional[str]
     summary: str
     
