@@ -11,8 +11,8 @@ from agents.select_agent import SelectAgent
 from memory.memory_manager import Memory
 from log_config import log
 from utils.utils import parse_completion_rate
-from utils.parallel_ai import parallel_query
 from utils.mongo_utils import load_dataframe, save_dataframe
+from utils.local_store import get_screen_bundle_dir
 
 
 class Status(Enum):
@@ -89,8 +89,33 @@ class MobileGPT:
 
         # 若页面索引变化（进入新页面），初始化页面管理器并结束当前子任务
         if page_index != self.current_page_index:
+            # 页面切换前先尝试将上一页的数据写入上一页目录，避免错位
+            try:
+                if self.current_page_index is not None and self.current_page_index >= 0:
+                    buf = getattr(self, '_local_buffer', None)
+                    if buf:
+                        xml_idx_prev = sorted({it.get('index') for it in buf.get('xmls', []) if 'index' in it})
+                        shot_idx_prev = sorted({it.get('index') for it in buf.get('shots', []) if 'index' in it})
+                        common_prev = sorted(list(set(xml_idx_prev).intersection(shot_idx_prev)))
+                        task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
+                        log(f"[page] change prev={self.current_page_index} -> curr={page_index}, task={task_name}, prev_xml_idx={xml_idx_prev}, prev_shot_idx={shot_idx_prev}, prev_common={common_prev}, dest_prev=memory/log/{task_name}/pages/{self.current_page_index}/screen", "blue")
+                        if common_prev:
+                            # 落到上一页
+                            self.__flush_buffer_to_page(self.current_page_index)
+            except Exception:
+                pass
             self.memory.init_page_manager(page_index)
             self.current_page_index = page_index
+            # 切到新页后再记录当前页缓冲概况
+            try:
+                task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
+                buf = getattr(self, '_local_buffer', None)
+                xml_idx = sorted({it.get('index') for it in (buf.get('xmls') if buf else []) if 'index' in it})
+                shot_idx = sorted({it.get('index') for it in (buf.get('shots') if buf else []) if 'index' in it})
+                common = sorted(list(set(xml_idx).intersection(shot_idx)))
+                log(f"[page] now at curr={page_index}, task={task_name}, xml_idx={xml_idx}, shot_idx={shot_idx}, common={common}, dest_curr=memory/log/{task_name}/pages/{page_index}/screen", "blue")
+            except Exception:
+                pass
 
             if self.subtask_status == Status.LEARN:
                 self.__finish_subtask()
@@ -198,6 +223,85 @@ class MobileGPT:
             next_action = self.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
         # 返回生成的下一步动作
         return next_action
+
+    def __flush_buffer_to_page(self, page_index: int) -> None:
+        """将缓冲中的最近一对(shot+xml)写入指定页面的 screen 目录。"""
+        buf = getattr(self, '_local_buffer', None)
+        if not buf or (not buf.get('xmls') or not buf.get('shots')):
+            return
+
+        # 寻找最近一对共同 index
+        xml_indices = {item.get('index') for item in buf['xmls'] if 'index' in item}
+        shot_indices = {item.get('index') for item in buf['shots'] if 'index' in item}
+        common = sorted(list(xml_indices.intersection(shot_indices)))
+        if not common:
+            return
+        index = common[-1]
+
+        # 取出对应项
+        xml_item = None
+        for i in reversed(range(len(buf['xmls']))):
+            if buf['xmls'][i].get('index') == index:
+                xml_item = buf['xmls'].pop(i)
+                break
+        shot_item = None
+        for i in reversed(range(len(buf['shots']))):
+            if buf['shots'][i].get('index') == index:
+                shot_item = buf['shots'].pop(i)
+                break
+        if not xml_item or not shot_item:
+            return
+
+        # 目标目录
+        task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
+        dest_dir = get_screen_bundle_dir(task_name, page_index)
+
+        # 写 screenshot
+        try:
+            import os
+            shot_bytes = shot_item.get('bytes', b'')
+            with open(os.path.join(dest_dir, 'screenshot.jpg'), 'wb') as f:
+                f.write(shot_bytes)
+            log(f"[flush] wrote screenshot -> {dest_dir}/screenshot.jpg ({len(shot_bytes)} bytes)", "blue")
+        except Exception as e:
+            log(f"[flush] write screenshot failed: {e}", "red")
+
+        # 生成与写入 XML 变体
+        raw_xml = xml_item.get('xml', '')
+        try:
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            import xml.dom.minidom as minidom
+            parsed = parseXML.parse(raw_xml)
+            hierarchy = parseXML.hierarchy_parse(parsed)
+            tree = ET.fromstring(parsed)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded = ET.tostring(tree, encoding='unicode')
+            pretty = minidom.parseString(encoded).toprettyxml()
+
+            import os
+            with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
+                f.write(raw_xml)
+            with open(os.path.join(dest_dir, 'parsed.xml'), 'w', encoding='utf-8') as f:
+                f.write(parsed)
+            with open(os.path.join(dest_dir, 'hierarchy.xml'), 'w', encoding='utf-8') as f:
+                f.write(hierarchy)
+            with open(os.path.join(dest_dir, 'html.xml'), 'w', encoding='utf-8') as f:
+                f.write(encoded)
+            with open(os.path.join(dest_dir, 'pretty.xml'), 'w', encoding='utf-8') as f:
+                f.write(pretty)
+            log(f"[flush] wrote xmls -> {dest_dir}/(raw|parsed|hierarchy|html|pretty).xml", "blue")
+        except Exception as e:
+            try:
+                import os
+                with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
+                    f.write(raw_xml)
+            except Exception:
+                pass
+            log(f"[flush] write xml failed: {e}", "red")
 
     def set_qa_answer(self, info_name: str, question: str, answer: str):
         qa = {"info": info_name, "question": question, "answer": answer}

@@ -91,7 +91,35 @@ class Memory:
         return self.page_managers[page_index].get_available_subtasks()
 
     def add_new_action(self, new_action, page_index):
-        self.page_managers[page_index].add_new_action(new_action)
+        page_manager = self.page_managers[page_index]
+        # 1) 写入 available_subtasks.csv（已有逻辑）
+        page_manager.add_new_action(new_action)
+        # 2) 同步写入最小示例到 subtasks.csv（若不存在）
+        try:
+            subtask_raw = {
+                "name": new_action.get("name", "unknown"),
+                "description": new_action.get("description", ""),
+                "parameters": new_action.get("parameters", {})
+            }
+            page_manager.save_subtask(subtask_raw, example={})
+        except Exception:
+            pass
+        # 3) 可选：首次成功即写入 actions.csv 基础动作（避免重复）
+        try:
+            action_db = getattr(page_manager, 'action_db', None)
+            need_write = True
+            if action_db is not None and not action_db.empty:
+                same = action_db[(action_db.get('subtask_name') == new_action.get('name')) & (action_db.get('step') == 0)]
+                if same is not None and not same.empty:
+                    need_write = False
+            if need_write:
+                base_action = {
+                    "name": new_action.get("name", "unknown"),
+                    "parameters": new_action.get("parameters", {})
+                }
+                page_manager.save_action(new_action.get('name', 'unknown'), 0, base_action, example={})
+        except Exception:
+            pass
 
     def search_node_by_hierarchy(self, parsed_xml, hierarchy_xml, encoded_xml) -> (int, list):
         # 1. First search for at most 5 candidate nodes based only on the hierarchy of the screen
@@ -193,8 +221,24 @@ class Memory:
         if next_subtask_name:
             next_subtask_data = self.page_manager.get_next_subtask_data(next_subtask_name)
 
-            next_subtask = {'name': next_subtask_data['name'], 'description': next_subtask_data['description'],
-                            'parameters': json.loads(next_subtask_data['parameters']) if next_subtask_data['parameters'] != "\"{}\"" else {}}
+            raw_params = next_subtask_data.get('parameters', {})
+            params: dict = {}
+            if isinstance(raw_params, dict):
+                params = raw_params
+            elif isinstance(raw_params, str):
+                try:
+                    # 兼容 '"{}"'、'' 等情况
+                    if raw_params.strip() == '' or raw_params.strip().strip('"') == '{}':
+                        params = {}
+                    else:
+                        params = json.loads(raw_params)
+                except Exception:
+                    params = {}
+            else:
+                params = {}
+
+            next_subtask = {'name': next_subtask_data.get('name', next_subtask_name), 'description': next_subtask_data.get('description', ''),
+                            'parameters': params}
             # 若子任务有参数，调用param_fill_agent填充参数（结合用户指令、问答历史、界面）
             if len(next_subtask['parameters']) > 0:
                 params = param_fill_agent.parm_fill_subtask(instruction=self.instruction,

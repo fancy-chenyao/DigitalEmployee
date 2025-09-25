@@ -519,8 +519,34 @@ class Server:
             
             # 解析XML数据
             from screenParser.Encoder import xmlEncoder
+            from env_config import Config
+            import os
+            # 本同步路径也改为不落盘，仅用于生成推理输入
             screen_parser = xmlEncoder()
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(xml_content)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
+            # 将原始XML缓存在 mobilegpt 上，与最近一次截图对齐（_screen_count - 1）
+            try:
+                mobilegpt = session.mobilegpt
+                if mobilegpt is not None:
+                    current_count = getattr(mobilegpt, '_screen_count', 0)
+                    assigned_index = max(current_count - 1, 0)
+                    buf = getattr(mobilegpt, '_local_buffer', None)
+                    if buf is None:
+                        buf = {'xmls': [], 'shots': []}
+                        setattr(mobilegpt, '_local_buffer', buf)
+                    buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
+                    log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+            except Exception:
+                pass
             
             log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
@@ -550,10 +576,20 @@ class Server:
             
             # 解析XML数据
             from screenParser.Encoder import xmlEncoder
+            from env_config import Config
+            import os
+            # 同步路径：不落盘，仅解析
             screen_parser = xmlEncoder()
-            
-            # 解析XML
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(xml_content)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
             
             
             log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
@@ -688,9 +724,25 @@ class Server:
                 self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
 
             
-                screen_parser = xmlEncoder()
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
-                parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
+                # 仅解析，不落盘
+                from screenParser import parseXML
+                import xml.etree.ElementTree as ET
+                parsed_xml = parseXML.parse(error_info['cur_xml'])
+                hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+                tree = ET.fromstring(parsed_xml)
+                for element in tree.iter():
+                    for k in ("bounds", "important", "class"):
+                        if k in element.attrib:
+                            del element.attrib[k]
+                encoded_xml = ET.tostring(tree, encoding='unicode')
+                parsed_xml_pre = parseXML.parse(error_info['pre_xml'])
+                hierarchy_xml_pre = parseXML.hierarchy_parse(parsed_xml_pre)
+                tree_pre = ET.fromstring(parsed_xml_pre)
+                for element in tree_pre.iter():
+                    for k in ("bounds", "important", "class"):
+                        if k in element.attrib:
+                            del element.attrib[k]
+                encoded_xml_pre = ET.tostring(tree_pre, encoding='unicode')
 
             # 初始化AgentMemory
             self.agent_memory = AgentMemory(
@@ -774,12 +826,31 @@ class Server:
             return
             
         try:
-            # 导入screen_parser
-            from screenParser.Encoder import xmlEncoder
-            screen_parser = xmlEncoder()
-            
-            # 解析当前XML以获得所需的格式
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+            # 仅解析，不落盘
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(current_xml)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
+            # 将原始XML缓存在 mobilegpt 上，与最近一次截图对齐（_screen_count - 1）
+            try:
+                mobilegpt = session.mobilegpt
+                if mobilegpt is not None:
+                    current_count = getattr(mobilegpt, '_screen_count', 0)
+                    assigned_index = max(current_count - 1, 0)
+                    buf = getattr(mobilegpt, '_local_buffer', None)
+                    if buf is None:
+                        buf = {'xmls': [], 'shots': []}
+                        setattr(mobilegpt, '_local_buffer', buf)
+                    buf['xmls'].append({'index': assigned_index, 'xml': current_xml})
+                    log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}", "blue")
+            except Exception:
+                pass
             
             # 搜索当前页面节点并获取可用子任务
             page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
@@ -894,12 +965,17 @@ class Server:
             return
             
         try:
-            # 导入screen_parser
-            from screenParser.Encoder import xmlEncoder
-            screen_parser = xmlEncoder()
-            
-            # 解析XML
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+            # 仅解析，不落盘
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(current_xml)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
             page_index, _ = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
             
             # 使用derive_agent重新生成动作，传入反思建议
