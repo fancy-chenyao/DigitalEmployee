@@ -699,7 +699,7 @@ class Server:
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
-        log(f"收到错误消息: {error_content}", "red")
+        log("收到错误消息", "red")
 
         # 获取必要的变量
         client_socket = session.client_socket
@@ -717,15 +717,35 @@ class Server:
 
         try:
             # 解析错误信息
+            log("解析错误消息", "red")
             error_info = self._parse_error_message(error_content)
             screen_parser = xmlEncoder()
             parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
             parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
 
             # 获取前一个界面的子任务列表和执行的子任务
-            page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
-            available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
-            current_subtask = mobileGPT.current_subtask
+            try:
+                log("尝试搜索匹配的历史页面", "blue")
+                page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre)
+                log(f"search_node返回结果: page_index={page_index}", "blue")
+                
+                # if page_index == -1:
+                #     log("未找到匹配页面，尝试探索新界面", "blue")
+                #     page_index = mobileGPT.explore_agent.explore(parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre)
+                #     log(f"explore返回结果: page_index={page_index}", "blue")
+                
+                log(f"获取可用子任务，page_index={page_index}", "blue")
+                available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
+                log(f"获取到的可用子任务: {available_subtasks}", "blue")
+                
+                current_subtask = mobileGPT.current_subtask
+                log(f"当前子任务: {current_subtask}", "blue")
+            except Exception as e:
+                log(f"获取子任务列表时发生异常: {str(e)}", "red")
+                # 设置默认值，避免后续代码出错
+                page_index = -1
+                available_subtasks = []
+                current_subtask = None
 
             # 初始化AgentMemory
             self.agent_memory = AgentMemory(
@@ -762,7 +782,7 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
                     
                 else:
                     # 获取MobileGPT实例并调用方法
@@ -771,7 +791,14 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
+            
+                if action:
+                    log(f"MobileGPT返回动作: {action}", "green")
+                    # 发送动作给客户端
+                    self._send_action_to_client(session, action)
+                else:
+                    log("MobileGPT未返回动作", "yellow")
                     
         except Exception as e:
             log(f"处理错误消息时发生异常: {e}", "red")
