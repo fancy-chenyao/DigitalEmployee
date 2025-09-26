@@ -44,6 +44,8 @@ class DeriveAgent:
         # derive_agent_prompt.get_prompts：传入用户指令、当前子任务、历史记录、界面信息、示例，生成结构化提示词
         # 提示词内容示例："用户要'发消息'，当前子任务是'点击发送'，历史已执行'输入文本'，界面有'发送按钮'，请生成点击坐标"
         response = query(derive_prompt, model=os.getenv("DERIVE_AGENT_GPT_VERSION"))
+        log(f"derive_agent收到AI响应: {response}", "blue")
+        log(f"derive_agent收到AI响应类型: {type(response)}", "blue")
         
         # 检查响应是否为有效字典
         if not isinstance(response, dict):

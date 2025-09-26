@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<div id="view_253338901" index="33">
+	<div id="view_65749336" index="4">
+		<button id="view_242477676" description="返回" index="0"/>
+		<MaterialTextView text="关闭" id="view_72345653" index="1"/>
+		<MaterialTextView text="拟请假时间" id="view_214185162" index="2"/>
+		<View id="view_98317883" index="3"/>
+	</div>
+	<View id="view_186897073" index="5"/>
+	<div id="view_224783779" index="27">
+		<MaterialTextView text="年休假 (工作日)" id="view_240702358" index="6"/>
+		<button id="view_157204334" index="14">
+			<AppCompatImageView id="view_139328279" description="必填" index="7"/>
+			<MaterialTextView text="开始时间" id="view_108993284" index="8"/>
+			<View id="view_124905709" index="9"/>
+			<MaterialTextView text="2025年09月26日" id="view_80122658" index="10"/>
+			<button id="view_51455721" index="13">
+				<MaterialTextView text="全天" id="view_128790963" index="11"/>
+				<AppCompatImageView id="view_223667056" description="选择" index="12"/>
+			</button>
+		</button>
+		<button id="view_22923809" index="21">
+			<MaterialTextView text="结束时间" id="view_146748943" index="15"/>
+			<View id="view_175949468" index="16"/>
+			<MaterialTextView text="2025年09月26日" id="view_72108197" index="17"/>
+			<button id="view_249409672" index="20">
+				<MaterialTextView text="全天" id="view_121332858" index="18"/>
+				<AppCompatImageView id="view_222503979" description="选择" index="19"/>
+			</button>
+		</button>
+		<div id="view_194906322" index="26">
+			<MaterialTextView text="年休假对应年份" id="view_252399174" index="22"/>
+			<View id="view_164485127" index="23"/>
+			<MaterialTextView text="2025年年假" id="view_14765364" index="24"/>
+			<AppCompatImageView id="view_262924125" description="选择" index="25"/>
+		</div>
+	</div>
+	<div id="view_180657241" index="29"/>
+	<div id="view_53469214" index="30"/>
+	<button text="拟请假1天, 确认" id="view_115327231" index="31"/>
+</div>
