@@ -17,6 +17,12 @@ class MobileGPTGlobal private constructor() {
         const val INSTRUCTION_EXTRA = "com.example.MobileGPT.INSTRUCTION_EXTRA"
         const val APP_NAME_EXTRA = "com.example.MobileGPT.APP_NAME_EXTRA"
         
+        // Ask功能相关常量
+        const val ANSWER_ACTION = "com.example.MobileGPT.ANSWER_ACTION"
+        const val INFO_NAME_EXTRA = "com.example.MobileGPT.INFO_NAME_EXTRA"
+        const val QUESTION_EXTRA = "com.example.MobileGPT.QUESTION_EXTRA"
+        const val ANSWER_EXTRA = "com.example.MobileGPT.ANSWER_EXTRA"
+        
         /**
          * 可用操作列表
          */

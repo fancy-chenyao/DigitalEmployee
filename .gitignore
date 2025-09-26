@@ -278,6 +278,7 @@ old/
 # Other project directories that should be ignored
 App_Explorer/
 App_Origin/
+App_old/
 App.rar
 
 # OS-specific files
