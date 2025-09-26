@@ -1,18 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/white">
-
-    <!-- 顶部标题栏 -->
+    <!-- 页面主内容 -->
     <LinearLayout
+        android:id="@+id/pageRoot"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="16dp"
-        android:background="@color/white"
-        android:gravity="center_vertical">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- 顶部标题栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="16dp"
+            android:background="@color/white"
+            android:gravity="center_vertical">
 
         <!-- 返回按钮 -->
         <ImageView
@@ -41,7 +46,7 @@
             android:layout_width="24dp"
             android:layout_height="24dp" />
 
-    </LinearLayout>
+        </LinearLayout>
 
     <!-- 分割线 -->
     <View
@@ -285,4 +290,132 @@
 
     </LinearLayout>
 
-</LinearLayout>
+    <!-- 关闭页面主内容容器 -->
+    </LinearLayout>
+
+    <!-- 页面内确认弹层：覆盖在主内容之上 -->
+    <FrameLayout
+        android:id="@+id/confirmOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <!-- 半透明遮罩 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+
+        <!-- 弹窗卡片 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:background="@android:color/white"
+            android:elevation="8dp">
+
+            <TextView
+                android:id="@+id/confirmTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="提交确认"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/confirmMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="确定要提交请假申请吗？"
+                android:textSize="15sp"
+                android:textColor="@color/text_secondary" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnCancelOverlay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="取消" />
+
+                <Button
+                    android:id="@+id/btnOkOverlay"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="12dp"
+                    android:text="确定" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <!-- 提交成功弹层：覆盖在主内容之上 -->
+    <FrameLayout
+        android:id="@+id/successOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:background="@android:color/white"
+            android:elevation="8dp">
+
+            <TextView
+                android:id="@+id/successTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="提交成功"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:id="@+id/successMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="您的请假申请已提交"
+                android:textSize="15sp"
+                android:textColor="@color/text_secondary" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnOkSuccess"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="确定" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+</FrameLayout>

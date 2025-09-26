@@ -249,14 +249,14 @@ class CustomDatePickerView @JvmOverloads constructor(
         selectedDate = calendar.time
 
 //        // // 更新显示
-//        updateDisplay()
+        updateDisplay()
 
 
         // 自动确认选择的日期并关闭日期选择器
-        selectedDate?.let { date ->
-            onDateSelectedListener?.invoke(date)
-        }
-        hide()
+//        selectedDate?.let { date ->
+//            onDateSelectedListener?.invoke(date)
+//        }
+//        hide()
     }
 
     /**

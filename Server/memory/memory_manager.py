@@ -45,15 +45,24 @@ class Memory:
 
         log(f"📊 内存初始化: 任务='{task_name}', 指令='{instruction[:50]}...'", "blue")
 
-        # 使用缓存优化数据库查询
-        self.task_db = init_database(self.task_db_path, task_header, use_cache=True)
+        # 使用缓存优化数据库查询（本地模式按任务维度读取CSV）
+        if not Config.ENABLE_DB:
+            self.task_db = read_dataframe_csv(self.task_db_path, task_header, task_name=self.task_name)
+        else:
+            self.task_db = init_database(self.task_db_path, task_header, use_cache=True)
         log(f"📊 任务数据库加载: 任务数量={len(self.task_db)}", "cyan")
         
-        self.page_db = init_database(self.page_path, page_header, use_cache=True)
+        if not Config.ENABLE_DB:
+            self.page_db = read_dataframe_csv(self.page_path, page_header, task_name=self.task_name)
+        else:
+            self.page_db = init_database(self.page_path, page_header, use_cache=True)
         self.page_db.set_index('index', drop=False, inplace=True)
         log(f"📊 页面数据库加载: 页面数量={len(self.page_db)}", "cyan")
         
-        self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header, use_cache=True)
+        if not Config.ENABLE_DB:
+            self.hierarchy_db = read_dataframe_csv(self.screen_hierarchy_path, hierarchy_header, task_name=self.task_name)
+        else:
+            self.hierarchy_db = init_database(self.screen_hierarchy_path, hierarchy_header, use_cache=True)
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
         log(f"📊 层级数据库加载: 层级数量={len(self.hierarchy_db)}", "cyan")
         
@@ -91,7 +100,35 @@ class Memory:
         return self.page_managers[page_index].get_available_subtasks()
 
     def add_new_action(self, new_action, page_index):
-        self.page_managers[page_index].add_new_action(new_action)
+        page_manager = self.page_managers[page_index]
+        # 1) 写入 available_subtasks.csv（已有逻辑）
+        page_manager.add_new_action(new_action)
+        # 2) 同步写入最小示例到 subtasks.csv（若不存在）
+        try:
+            subtask_raw = {
+                "name": new_action.get("name", "unknown"),
+                "description": new_action.get("description", ""),
+                "parameters": new_action.get("parameters", {})
+            }
+            page_manager.save_subtask(subtask_raw, example={})
+        except Exception:
+            pass
+        # 3) 可选：首次成功即写入 actions.csv 基础动作（避免重复）
+        try:
+            action_db = getattr(page_manager, 'action_db', None)
+            need_write = True
+            if action_db is not None and not action_db.empty:
+                same = action_db[(action_db.get('subtask_name') == new_action.get('name')) & (action_db.get('step') == 0)]
+                if same is not None and not same.empty:
+                    need_write = False
+            if need_write:
+                base_action = {
+                    "name": new_action.get("name", "unknown"),
+                    "parameters": new_action.get("parameters", {})
+                }
+                page_manager.save_action(new_action.get('name', 'unknown'), 0, base_action, example={})
+        except Exception:
+            pass
 
     def search_node_by_hierarchy(self, parsed_xml, hierarchy_xml, encoded_xml) -> (int, list):
         # 1. First search for at most 5 candidate nodes based only on the hierarchy of the screen
@@ -159,12 +196,29 @@ class Memory:
         # 构造层级数据（页面索引、XML、嵌入向量）
         new_screen_hierarchy = {'index': page_index, 'screen': screen, 'embedding': str(embedding)}
         # 写入界面层级库并重新加载（确保后续匹配可用）
-        hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
-        hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
+        if not Config.ENABLE_DB:
+            hierarchy_db = read_dataframe_csv(self.screen_hierarchy_path, ['index', 'screen', 'embedding'], task_name=self.task_name)
+        else:
+            hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
+        
+        # 若该 page_index 已存在，则更新；否则追加，保证“每个新页面一行”
+        if not hierarchy_db.empty and 'index' in hierarchy_db.columns and page_index in set(hierarchy_db['index'].tolist()):
+            try:
+                mask = (hierarchy_db['index'] == page_index)
+                hierarchy_db.loc[mask, 'screen'] = new_screen_hierarchy['screen']
+                hierarchy_db.loc[mask, 'embedding'] = new_screen_hierarchy['embedding']
+            except Exception:
+                hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
+        else:
+            hierarchy_db = pd.concat([hierarchy_db, pd.DataFrame([new_screen_hierarchy])], ignore_index=True)
+        
         save_dataframe(self.screen_hierarchy_path, hierarchy_db)
         write_dataframe_csv(self.screen_hierarchy_path, hierarchy_db, task_name=self.task_name)
 
-        self.hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
+        if not Config.ENABLE_DB:
+            self.hierarchy_db = read_dataframe_csv(self.screen_hierarchy_path, ['index', 'screen', 'embedding'], task_name=self.task_name)
+        else:
+            self.hierarchy_db = init_database(self.screen_hierarchy_path, ['index', 'screen', 'embedding'])
         self.hierarchy_db['embedding'] = self.hierarchy_db.embedding.apply(safe_literal_eval)
 
     def get_next_subtask(self, page_index, qa_history, screen):
@@ -193,8 +247,24 @@ class Memory:
         if next_subtask_name:
             next_subtask_data = self.page_manager.get_next_subtask_data(next_subtask_name)
 
-            next_subtask = {'name': next_subtask_data['name'], 'description': next_subtask_data['description'],
-                            'parameters': json.loads(next_subtask_data['parameters']) if next_subtask_data['parameters'] != "\"{}\"" else {}}
+            raw_params = next_subtask_data.get('parameters', {})
+            params: dict = {}
+            if isinstance(raw_params, dict):
+                params = raw_params
+            elif isinstance(raw_params, str):
+                try:
+                    # 兼容 '"{}"'、'' 等情况
+                    if raw_params.strip() == '' or raw_params.strip().strip('"') == '{}':
+                        params = {}
+                    else:
+                        params = json.loads(raw_params)
+                except Exception:
+                    params = {}
+            else:
+                params = {}
+
+            next_subtask = {'name': next_subtask_data.get('name', next_subtask_name), 'description': next_subtask_data.get('description', ''),
+                            'parameters': params}
             # 若子任务有参数，调用param_fill_agent填充参数（结合用户指令、问答历史、界面）
             if len(next_subtask['parameters']) > 0:
                 params = param_fill_agent.parm_fill_subtask(instruction=self.instruction,

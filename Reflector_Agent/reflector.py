@@ -46,11 +46,11 @@ class Reflector:
         persona_content = DEFAULT_PERSONA_FORMAT_TEMPLATE
 
         formatted_steps = []
-        formatted_step_0 = f"""Step 0:
+        formatted_step_0 = f"""0 执行子任务前界面信息:
         {agent_memory.preXML}
         """
         formatted_steps.append(formatted_step_0)
-        formatted_step_1 = f"""Step 1:
+        formatted_step_1 = f"""1 执行子任务后界面信息:
         {agent_memory.curXML}
         """
         formatted_steps.append(formatted_step_1)
@@ -61,13 +61,20 @@ class Reflector:
         error_message = agent_memory.errMessage
         action = agent_memory.action
 
+        instruction = agent_memory.instruction
+        current_subtask = agent_memory.current_subtask
+        available_subtasks = agent_memory.available_subtasks
+
         # 构建用户消息内容，包含人格信息、目标和执行步骤
         content_sections = [
             persona_content,
-            # f"Error Type: {error_type}",
-            f"Error Message: {error_message}",
-            f"Action: {action}",
-            f"Memory Steps:\n{formatted_steps_str}",
+            f"用户整体的指令: {instruction}",
+            f"选择子任务前可用的子任务列表: {available_subtasks}",
+            f"当前正在执行的子任务: {current_subtask}",
+            f"客户端返回的错误类型: {error_type}",
+            f"执行返回的错误信息: {error_message}",
+            f"客户端执行的子任务动作: {action}",
+            f"执行子任务前后的界面信息:\n{formatted_steps_str}",
             "请根据上述信息，提供直接建议和对当前界面执行失败的简要总结。请根据指定的JSON格式返回结果。"
         ]
         user_content = "\n\n".join(content_sections)

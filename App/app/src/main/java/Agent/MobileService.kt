@@ -59,7 +59,7 @@ class MobileService : Service() {
     private lateinit var wm: WindowManager
     private var mClient: MobileGPTClient? = null
     private lateinit var mSpeech: MobileGPTSpeechRecognizer
-//    lateinit var mAskPopUp: AskPopUp
+    private lateinit var agentFloatingWindow: AgentFloatingWindowManager
     private var mMobileGPTGlobal: MobileGPTGlobal? = null
     private var nodeMap: HashMap<Int, GenericElement>? = null
     private var instruction: String? = null
@@ -98,38 +98,62 @@ class MobileService : Service() {
     }
 
     /**
-     * 广播接收器，用于接收指令
+     * 广播接收器，用于接收指令和答案
      */
     private val stringReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == MobileGPTGlobal.STRING_ACTION) {
-
-                val receivedInstruction = intent.getStringExtra(MobileGPTGlobal.INSTRUCTION_EXTRA)
-                if (receivedInstruction != null) {
-                    instruction = receivedInstruction
-                Log.d(TAG, "receive broadcast")
-                mExecutorService.execute { 
-
-                        // 记录当前发送的指令
-                        currentInstruction = receivedInstruction
-                        Log.d(TAG, "记录当前发送的指令: $currentInstruction")
-                        val message = MobileGPTMessage().createInstructionMessage(receivedInstruction)
-                        mClient?.sendMessage(message)
-                        // 发送指令后启动屏幕更新
-
+            when (intent.action) {
+                MobileGPTGlobal.STRING_ACTION -> {
+                    val receivedInstruction = intent.getStringExtra(MobileGPTGlobal.INSTRUCTION_EXTRA)
+                    if (receivedInstruction != null) {
+                        instruction = receivedInstruction
+                        Log.d(TAG, "receive broadcast")
+                        mExecutorService.execute { 
+                            // 记录当前发送的指令
+                            currentInstruction = receivedInstruction
+                            Log.d(TAG, "记录当前发送的指令: $currentInstruction")
+                            val message = MobileGPTMessage().createInstructionMessage(receivedInstruction)
+                            mClient?.sendMessage(message)
+                            // 发送指令后启动屏幕更新
+                        }
+                    } else {
+                        Log.e(TAG, "Received null instruction from intent")
                     }
-                } else {
-                    Log.e(TAG, "Received null instruction from intent")
+                    // 初始化页面变化的参数
+                    xmlPending = true;
+                    screenNeedUpdate = true;
+                    firstScreen = true;
+                    WaitScreenUpdate()
                 }
-                // 初始化页面变化的参数
-                xmlPending = true;
-                screenNeedUpdate = true;
-                firstScreen = true;
-                WaitScreenUpdate()
-            } else if (intent.action == "com.example.emplab.TRIGGER_PAGE_CHANGE") {
-                // 处理页面变化触发广播
-                Log.d(TAG, "收到页面变化触发广播")
-                triggerPageChangeDetection()
+                MobileGPTGlobal.ANSWER_ACTION -> {
+                    // 处理答案接收
+                    val infoName = intent.getStringExtra(MobileGPTGlobal.INFO_NAME_EXTRA)
+                    val question = intent.getStringExtra(MobileGPTGlobal.QUESTION_EXTRA)
+                    val answer = intent.getStringExtra(MobileGPTGlobal.ANSWER_EXTRA)
+                    val timestamp = intent.getLongExtra("timestamp", 0L)
+                    
+                    if (infoName != null && question != null && answer != null) {
+                        Log.d(TAG, "收到答案: $infoName - $question - $answer (时间戳: $timestamp)")
+                        
+                        // 验证答案有效性
+                        if (answer.isNotBlank()) {
+                            // 避免网络请求在主线程：放入执行器
+                            mExecutorService.execute {
+                                sendAnswer(infoName, question, answer)
+                                Log.d(TAG, "答案已发送到服务器")
+                            }
+                        } else {
+                            Log.w(TAG, "收到空答案，忽略")
+                        }
+                    } else {
+                        Log.e(TAG, "收到不完整的答案数据: infoName=$infoName, question=$question, answer=$answer")
+                    }
+                }
+                "com.example.emplab.TRIGGER_PAGE_CHANGE" -> {
+                    // 处理页面变化触发广播
+                    Log.d(TAG, "收到页面变化触发广播")
+                    triggerPageChangeDetection()
+                }
             }
         }
     }
@@ -157,14 +181,14 @@ class MobileService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("MobileGPT Service")
                 .setContentText("MobileGPT service is running")
-                .setSmallIcon(R.drawable.ic_menu_info_details) // 使用自定义图标
+                .setSmallIcon(android.R.drawable.ic_menu_info_details) // 使用系统图标
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
                 .setContentTitle("MobileGPT Service")
                 .setContentText("MobileGPT service is running")
-                .setSmallIcon(R.drawable.ic_menu_info_details)
+                .setSmallIcon(android.R.drawable.ic_menu_info_details)
                 .build()
         }
     }
@@ -192,6 +216,7 @@ class MobileService : Service() {
         
         // 注册广播接收器
         val intentFilter = IntentFilter(MobileGPTGlobal.STRING_ACTION)
+        intentFilter.addAction(MobileGPTGlobal.ANSWER_ACTION)
         intentFilter.addAction("com.example.emplab.TRIGGER_PAGE_CHANGE")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stringReceiver, intentFilter, RECEIVER_NOT_EXPORTED)
@@ -465,6 +490,33 @@ class MobileService : Service() {
         val message = MobileGPTMessage().createQAMessage(qaString)
         mClient?.sendMessage(message)
     }
+    
+    /**
+     * 显示悬浮窗
+     */
+    fun showFloatingWindow() {
+        if (::agentFloatingWindow.isInitialized) {
+            agentFloatingWindow.showFloatingWindow()
+        }
+    }
+    
+    /**
+     * 隐藏悬浮窗
+     */
+    fun hideFloatingWindow() {
+        if (::agentFloatingWindow.isInitialized) {
+            agentFloatingWindow.hideFloatingWindow()
+        }
+    }
+    
+    /**
+     * 切换悬浮窗显示状态
+     */
+    fun toggleFloatingWindow() {
+        if (::agentFloatingWindow.isInitialized) {
+            agentFloatingWindow.toggleFloatingWindow()
+        }
+    }
 
     /**
      * 处理服务器响应
@@ -548,9 +600,20 @@ class MobileService : Service() {
      */
     private fun handleAsk(info: String, question: String) {
         Log.d(TAG, "Asking question: $question")
-//        mAskPopUp.setQuestion(info, question)
         mSpeech.speak(question, true)
-//        mAskPopUp.showPopUp()
+        // 在当前前台Activity中显示应用内弹窗
+        val activity = ActivityTracker.getCurrentActivity()
+        if (activity != null) {
+            activity.runOnUiThread {
+                try {
+                    AgentFloatingWindowManager(activity).showAskDialog(info, question)
+                } catch (e: Exception) {
+                    Log.e(TAG, "显示Ask对话框失败: ${e.message}")
+                }
+            }
+        } else {
+            Log.e(TAG, "当前没有前台Activity，无法显示Ask对话框")
+        }
     }
 
     /**
@@ -1873,8 +1936,13 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             currentScreenShot = null
             
             // 清理其他资源
-        unregisterReceiver(stringReceiver)
-        mClient?.disconnect()
+            unregisterReceiver(stringReceiver)
+            mClient?.disconnect()
+            
+            // 清理悬浮窗资源
+            if (::agentFloatingWindow.isInitialized) {
+                agentFloatingWindow.cleanup()
+            }
             
             // 关闭线程池
             if (::mExecutorService.isInitialized) {

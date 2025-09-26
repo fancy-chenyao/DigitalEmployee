@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="320dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/dialog_background"
+    android:padding="16dp"
+    android:elevation="8dp">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="AI助手询问"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
+
+        <TextView
+            android:id="@+id/tv_char_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0/200"
+            android:textSize="12sp"
+            android:textColor="@color/text_secondary" />
+
+    </LinearLayout>
+
+    <!-- 问题显示区域 -->
+    <TextView
+        android:id="@+id/tv_question"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="问题内容"
+        android:textSize="14sp"
+        android:textColor="@color/text_primary"
+        android:background="@drawable/input_background"
+        android:padding="12dp"
+        android:layout_marginBottom="12dp"
+        android:minHeight="60dp"
+        android:gravity="center_vertical" />
+
+    <!-- 答案输入区域 -->
+    <EditText
+        android:id="@+id/edit_answer"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:hint="请输入您的答案..."
+        android:background="@drawable/input_background"
+        android:padding="12dp"
+        android:textSize="14sp"
+        android:textColor="@color/text_primary"
+        android:textColorHint="@color/text_hint"
+        android:gravity="top|start"
+        android:maxLines="3"
+        android:scrollbars="vertical"
+        android:inputType="textMultiLine|textCapSentences" />
+
+    <!-- 按钮区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="12dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btn_cancel"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="取消"
+            android:textSize="14sp"
+            android:textColor="@color/text_secondary"
+            android:background="@drawable/button_cancel_background"
+            android:minWidth="60dp"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btn_send_answer"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="发送答案"
+            android:textSize="14sp"
+            android:textColor="@color/white"
+            android:background="@drawable/button_send_background"
+            android:minWidth="80dp" />
+
+    </LinearLayout>
+
+</LinearLayout>

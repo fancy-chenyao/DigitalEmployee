@@ -519,8 +519,34 @@ class Server:
             
             # 解析XML数据
             from screenParser.Encoder import xmlEncoder
+            from env_config import Config
+            import os
+            # 本同步路径也改为不落盘，仅用于生成推理输入
             screen_parser = xmlEncoder()
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(xml_content)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
+            # 将原始XML缓存在 mobilegpt 上，与最近一次截图对齐（_screen_count - 1）
+            try:
+                mobilegpt = session.mobilegpt
+                if mobilegpt is not None:
+                    current_count = getattr(mobilegpt, '_screen_count', 0)
+                    assigned_index = max(current_count - 1, 0)
+                    buf = getattr(mobilegpt, '_local_buffer', None)
+                    if buf is None:
+                        buf = {'xmls': [], 'shots': []}
+                        setattr(mobilegpt, '_local_buffer', buf)
+                    buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
+                    log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+            except Exception:
+                pass
             
             log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
@@ -550,10 +576,20 @@ class Server:
             
             # 解析XML数据
             from screenParser.Encoder import xmlEncoder
+            from env_config import Config
+            import os
+            # 同步路径：不落盘，仅解析
             screen_parser = xmlEncoder()
-            
-            # 解析XML
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(xml_content, 0)
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(xml_content)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
             
             
             log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
@@ -660,15 +696,39 @@ class Server:
         qa_content = message.get('qa', '')
         log(f"收到问答消息: {qa_content}", "blue")
 
+        # 解析格式：info_name\question\answer
+        try:
+            info_name, question, answer = qa_content.split("\\", 2)
+        except Exception:
+            log("问答消息格式无效，期望格式为 info_name\\question\\answer", "red")
+            return
+
+        # 检查 MobileGPT 实例
+        mobilegpt = getattr(session, 'mobilegpt', None)
+        if not mobilegpt:
+            log("MobileGPT实例不存在，无法处理问答", "red")
+            return
+
+        # 写入答案并尝试继续生成动作
+        try:
+            action = mobilegpt.set_qa_answer(info_name, question, answer)
+            if action:
+                log(f"问答生效，发送后续动作: {action}", "green")
+                self._send_action_to_client(session, action)
+            else:
+                log("问答已记录，但未返回动作", "yellow")
+        except Exception as e:
+            log(f"处理问答时发生异常: {e}", "red")
+
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
-        log(f"收到错误消息: {error_content}", "red")
+        log("收到错误消息", "red")
 
         # 获取必要的变量
         client_socket = session.client_socket
         mobileGPT = getattr(session, 'mobilegpt', None)
-        screen_count = getattr(session, 'screen_count', 0)
+        # screen_count = getattr(session, 'screen_count', 0)
         
         # 检查必要的依赖
         if not client_socket:
@@ -681,16 +741,35 @@ class Server:
 
         try:
             # 解析错误信息
+            log("解析错误消息", "red")
             error_info = self._parse_error_message(error_content)
-            
-            # 如果有preXml，保存到MongoDB用于调试
-            if error_info.get('pre_xml'):
-                self._save_xml_to_mongo(error_info['pre_xml'], screen_count, 'error_pre_xml')
+            screen_parser = xmlEncoder()
+            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
+            parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
 
-            
-                screen_parser = xmlEncoder()
-                parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
-                parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
+            # 获取前一个界面的子任务列表和执行的子任务
+            try:
+                log("尝试搜索匹配的历史页面", "blue")
+                page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre)
+                log(f"search_node返回结果: page_index={page_index}", "blue")
+                
+                # if page_index == -1:
+                #     log("未找到匹配页面，尝试探索新界面", "blue")
+                #     page_index = mobileGPT.explore_agent.explore(parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre)
+                #     log(f"explore返回结果: page_index={page_index}", "blue")
+                
+                log(f"获取可用子任务，page_index={page_index}", "blue")
+                available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
+                log(f"获取到的可用子任务: {available_subtasks}", "blue")
+                
+                current_subtask = mobileGPT.current_subtask
+                log(f"当前子任务: {current_subtask}", "blue")
+            except Exception as e:
+                log(f"获取子任务列表时发生异常: {str(e)}", "red")
+                # 设置默认值，避免后续代码出错
+                page_index = -1
+                available_subtasks = []
+                current_subtask = None
 
             # 初始化AgentMemory
             self.agent_memory = AgentMemory(
@@ -699,10 +778,15 @@ class Server:
                 errMessage=error_info.get('error_message', 'No message'),
                 curXML=encoded_xml,
                 preXML=encoded_xml_pre,
-                action=error_info.get('action', 'None')
+                action=error_info.get('action', 'None'),
+                current_subtask=current_subtask,
+                available_subtasks=available_subtasks
             )
 
-            log(self.agent_memory, "blue")
+            log(self.agent_memory.instruction, "blue")
+            log(self.agent_memory.action, "blue")
+            log(f"当前子任务: {self.agent_memory.current_subtask}", "blue")
+            log(f"可用子任务: {self.agent_memory.available_subtasks}", "blue")
 
             # 调用Reflector进行反思分析
             reflector = Reflector(self.agent_memory)
@@ -715,14 +799,14 @@ class Server:
             else:
                 # 不需要回退，根据问题类型处理
                 advice = reflection.advice
-                if reflection.problem_type == 'area':
+                if reflection.problem_type == 'task':
                     # 获取MobileGPT实例并调用方法
                     mobilegpt = getattr(session, 'mobilegpt', None)
                     if mobilegpt is None:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
                     
                 else:
                     # 获取MobileGPT实例并调用方法
@@ -731,7 +815,14 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
+            
+                if action:
+                    log(f"MobileGPT返回动作: {action}", "green")
+                    # 发送动作给客户端
+                    self._send_action_to_client(session, action)
+                else:
+                    log("MobileGPT未返回动作", "yellow")
                     
         except Exception as e:
             log(f"处理错误消息时发生异常: {e}", "red")
@@ -774,12 +865,31 @@ class Server:
             return
             
         try:
-            # 导入screen_parser
-            from screenParser.Encoder import xmlEncoder
-            screen_parser = xmlEncoder()
-            
-            # 解析当前XML以获得所需的格式
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+            # 仅解析，不落盘
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(current_xml)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
+            # 将原始XML缓存在 mobilegpt 上，与最近一次截图对齐（_screen_count - 1）
+            try:
+                mobilegpt = session.mobilegpt
+                if mobilegpt is not None:
+                    current_count = getattr(mobilegpt, '_screen_count', 0)
+                    assigned_index = max(current_count - 1, 0)
+                    buf = getattr(mobilegpt, '_local_buffer', None)
+                    if buf is None:
+                        buf = {'xmls': [], 'shots': []}
+                        setattr(mobilegpt, '_local_buffer', buf)
+                    buf['xmls'].append({'index': assigned_index, 'xml': current_xml})
+                    log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}", "blue")
+            except Exception:
+                pass
             
             # 搜索当前页面节点并获取可用子任务
             page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
@@ -894,12 +1004,17 @@ class Server:
             return
             
         try:
-            # 导入screen_parser
-            from screenParser.Encoder import xmlEncoder
-            screen_parser = xmlEncoder()
-            
-            # 解析XML
-            parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(current_xml, screen_count)
+            # 仅解析，不落盘
+            from screenParser import parseXML
+            import xml.etree.ElementTree as ET
+            parsed_xml = parseXML.parse(current_xml)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
             page_index, _ = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
             
             # 使用derive_agent重新生成动作，传入反思建议

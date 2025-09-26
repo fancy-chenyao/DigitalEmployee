@@ -8,6 +8,10 @@ import android.text.TextWatcher
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import controller.NativeController
 
 class LeaveDetailsActivity : AppCompatActivity() {
     
@@ -59,7 +63,7 @@ class LeaveDetailsActivity : AppCompatActivity() {
         
         // 提交按钮
         btnSubmit.setOnClickListener {
-            showSubmitDialog()
+            showOverlayConfirm()
         }
         
         // 图片上传区域
@@ -123,30 +127,54 @@ class LeaveDetailsActivity : AppCompatActivity() {
         builder.show()
     }
     
-    private fun showSubmitDialog() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("提交确认")
-        builder.setMessage("确定要提交请假申请吗？")
-        builder.setPositiveButton("确定") { _, _ ->
-            // 显示提交成功消息
+    private fun showOverlayConfirm() {
+        val overlay = findViewById<View>(R.id.confirmOverlay)
+        val btnOk = findViewById<Button>(R.id.btnOkOverlay)
+        val btnCancel = findViewById<Button>(R.id.btnCancelOverlay)
+        overlay.visibility = View.VISIBLE
+
+        btnCancel.setOnClickListener {
+            overlay.visibility = View.GONE
+        }
+        btnOk.setOnClickListener {
+            overlay.visibility = View.GONE
             showSuccessDialog()
         }
-        builder.setNegativeButton("取消", null)
-        builder.show()
+
+        // // 延时1秒，抓取当前元素树并打印到前端日志
+        // Handler(Looper.getMainLooper()).postDelayed({
+        //     try {
+        //         NativeController.getElementTree(this) { tree ->
+        //             Log.d("LeaveDetailsActivity", "ElementTree(full):\n${tree.toFormattedString(0)}")
+        //             Toast.makeText(this, "元素树已打印到日志", Toast.LENGTH_SHORT).show()
+        //         }
+        //     } catch (_: Exception) {
+        //         Toast.makeText(this, "元素树抓取失败", Toast.LENGTH_SHORT).show()
+        //     }
+        // }, 1000)
     }
     
     private fun showSuccessDialog() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("提交成功")
-        builder.setMessage("您的请假申请已提交")
-        builder.setPositiveButton("确定") { _, _ ->
-            // 返回首页
+        val overlay = findViewById<View>(R.id.successOverlay)
+        val btnOk = findViewById<Button>(R.id.btnOkSuccess)
+        overlay.visibility = View.VISIBLE
+
+        btnOk.setOnClickListener {
+            overlay.visibility = View.GONE
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
             startActivity(intent)
             finish()
         }
-        builder.setCancelable(false)
-        builder.show()
+
+        // // 延时打印当前元素树，便于解析器捕捉
+        // Handler(Looper.getMainLooper()).postDelayed({
+        //     try {
+        //         NativeController.getElementTree(this) { tree ->
+        //             Log.d("LeaveDetailsActivity", "SuccessOverlay ElementTree:\n${tree.toFormattedString(0)}")
+        //             Toast.makeText(this, "成功弹层元素树已打印", Toast.LENGTH_SHORT).show()
+        //         }
+        //     } catch (_: Exception) {}
+        // }, 800)
     }
 }
