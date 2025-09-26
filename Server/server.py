@@ -775,7 +775,7 @@ class Server:
             else:
                 # 不需要回退，根据问题类型处理
                 advice = reflection.advice
-                if reflection.problem_type == 'area':
+                if reflection.problem_type == 'task':
                     # 获取MobileGPT实例并调用方法
                     mobilegpt = getattr(session, 'mobilegpt', None)
                     if mobilegpt is None:
