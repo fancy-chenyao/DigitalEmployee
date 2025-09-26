@@ -108,7 +108,7 @@ def get_usr_prompt(instruction, subtask, history, screen, examples, suggestions)
     if len(suggestions) > 0:
         usr_msg += (
             "***Useful Suggestions***:\n"
-            "Consider the following suggestions when selecting your next action:\n"
+            "Consider the following suggestions when selecting your next action, and avoid selecting the wrong action mentioned in the suggestions:\n"
             f"{suggestions}\n\n"
         )
     if len(examples) > 0:
