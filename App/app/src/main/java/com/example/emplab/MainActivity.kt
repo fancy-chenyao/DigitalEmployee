@@ -2,6 +2,7 @@ package com.example.emplab
 
 import Agent.MobileGPTGlobal
 import Agent.MobileService
+import Agent.AgentFloatingWindowManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -33,8 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvNavMessage: TextView
     private lateinit var tvNavProfile: TextView
     
-    // 悬浮窗管理器
-    private lateinit var floatingWindowManager: FloatingWindowManager
+    // 应用内悬浮窗（仅当前APP内显示）
+    private lateinit var agentFloatingWindow: AgentFloatingWindowManager
     
     // 权限请求码
     private val PERMISSION_REQUEST_CODE = 1001
@@ -58,6 +59,7 @@ class MainActivity : AppCompatActivity() {
         initViews()
         setupNavigation()
         setupFunctionClicks()
+        // 初始化并显示应用内悬浮窗
         setupFloatingWindow()
 
     }
@@ -289,15 +291,12 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * 设置悬浮窗
+     * 设置悬浮窗（可选：如需在进入首页就展示）
      */
     private fun setupFloatingWindow() {
-        // 初始化悬浮窗管理器
-        floatingWindowManager = FloatingWindowManager(this)
-        
-        // 延迟显示悬浮窗，确保界面完全加载
+        agentFloatingWindow = AgentFloatingWindowManager(this)
         findViewById<View>(android.R.id.content).post {
-            floatingWindowManager.showFloatingWindow()
+            agentFloatingWindow.showFloatingWindow()
         }
     }
     
@@ -305,42 +304,44 @@ class MainActivity : AppCompatActivity() {
      * 切换悬浮窗显示状态
      */
     fun toggleFloatingWindow() {
-        floatingWindowManager.toggleFloatingWindow()
+        agentFloatingWindow.toggleFloatingWindow()
     }
     
     /**
      * 显示悬浮窗
      */
     fun showFloatingWindow() {
-        floatingWindowManager.showFloatingWindow()
+        agentFloatingWindow.showFloatingWindow()
     }
     
     /**
      * 隐藏悬浮窗
      */
     fun hideFloatingWindow() {
-        floatingWindowManager.hideFloatingWindow()
+        agentFloatingWindow.hideFloatingWindow()
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        // 清理悬浮窗资源
-        floatingWindowManager.cleanup()
+        // 清理悬浮窗
+        if (::agentFloatingWindow.isInitialized) {
+            agentFloatingWindow.cleanup()
+        }
     }
     
     override fun onPause() {
         super.onPause()
-        // 暂停时隐藏悬浮窗
-        if (floatingWindowManager.isFloatingWindowShowing()) {
-            floatingWindowManager.hideFloatingWindow()
+        // 暂停时隐藏悬浮窗（按需）
+        if (::agentFloatingWindow.isInitialized && agentFloatingWindow.isFloatingWindowShowing()) {
+            agentFloatingWindow.hideFloatingWindow()
         }
     }
     
     override fun onResume() {
         super.onResume()
         // 恢复时显示悬浮窗
-        if (!floatingWindowManager.isFloatingWindowShowing()) {
-            floatingWindowManager.showFloatingWindow()
+        if (::agentFloatingWindow.isInitialized && !agentFloatingWindow.isFloatingWindowShowing()) {
+            agentFloatingWindow.showFloatingWindow()
         }
     }
 }
