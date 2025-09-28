@@ -801,9 +801,10 @@ class Server:
                 advice = reflection.advice
                 # 构建建议的结构
                 suggestion = {
-                    "action": error_info.get('action', 'None'),
-                    "advice": advice
+                    "出错的动作": error_info.get('action', 'None'),
+                    "建议": advice
                 }
+                log(f"建议: {suggestion}", "blue")
                 if reflection.problem_type == 'task':
                     # 获取MobileGPT实例并调用方法
                     mobilegpt = getattr(session, 'mobilegpt', None)
