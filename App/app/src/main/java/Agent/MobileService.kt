@@ -1005,16 +1005,266 @@ class MobileService : Service() {
     /**
      * 执行长按动作
      */
+    /**
+     * 执行长按动作
+     * 参考点击操作的逻辑和方法，包括成功验证机制、三种长按形式和页面验证机制
+     * 优先使用GenericElement中的view引用进行直接长按，提高长按成功率和性能
+     * 利用现有的页面变化监听机制来判断长按是否成功
+     */
     private fun executeLongClickAction(activity: Activity, element: GenericElement) {
+        Log.d(TAG, "开始执行长按动作 - 元素: ${element.resourceId}, longClickable: ${element.longClickable}, enabled: ${element.enabled}")
+        
+        // 记录长按前的状态
+        val preLongClickActivity = ActivityTracker.getCurrentActivity()
+        val preLongClickActivityName = preLongClickActivity?.javaClass?.simpleName ?: "null"
+        val preLongClickMonitoredActivity = currentMonitoredActivity
+        var preLongClickViewTreeHash: Int? = null
+        
+        // 获取长按前页面元素树的哈希值
+        preLongClickActivity?.let { longClickActivity ->
+            try {
+                val rootView = longClickActivity.window?.decorView?.rootView
+                preLongClickViewTreeHash = if (rootView != null) {
+                    getViewTreeHash(rootView)
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "获取长按前视图树哈希值失败", e)
+            }
+        }
+        
+        Log.d(TAG, "记录长按前状态 - Activity: $preLongClickActivityName, 监听Activity: ${preLongClickMonitoredActivity?.javaClass?.simpleName}, 视图树哈希: $preLongClickViewTreeHash")
+        
+        // 首先检查目标元素是否可长按
+        if (element.longClickable && element.enabled) {
+            // 优先使用view引用进行直接长按
+            if (element.view != null) {
+                Log.d(TAG, "使用view引用进行直接长按")
+                ElementController.longClickElementByView(element) { success ->
+                    if (success) {
+                        Log.d(TAG, "view引用长按操作返回成功，等待页面变化验证...")
+                        screenNeedUpdate = true
+                        xmlPending = true
+                        // 利用现有的页面变化监听机制来验证长按效果
+                        verifyLongClickSuccessWithPageChange(preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash) { verified ->
+                            if (verified) {
+                                Log.d(TAG, "通过view引用长按成功且已验证生效")
+                                
+                            } else {
+                                Log.w(TAG, "view引用长按操作成功但未生效，回退到传统方式")
+                                fallbackLongClickAction(activity, element, preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash)
+                            }
+                        }
+                    } else {
+                        Log.w(TAG, "通过view引用长按失败，回退到传统方式")
+                        fallbackLongClickAction(activity, element, preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash)
+                    }
+                }
+            } else {
+                Log.d(TAG, "元素没有view引用，使用传统直接长按方式")
+                // 没有view引用时使用传统方式
+                ElementController.longClickElement(activity, element.resourceId) { success ->
+                    if (success) {
+                        screenNeedUpdate = true
+                        xmlPending = true
+                        Log.d(TAG, "传统长按操作返回成功，等待页面变化验证...")
+                        // 利用现有的页面变化监听机制来验证长按效果
+                        verifyLongClickSuccessWithPageChange(preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash) { verified ->
+                            if (verified) {
+                                Log.d(TAG, "传统长按成功且已验证生效")
+                                
+                            } else {
+                                Log.w(TAG, "传统长按操作成功但未生效，回退到坐标长按")
+                                executeCoordinateLongClick(activity, element)
+                            }
+                        }
+                    } else {
+                        Log.w(TAG, "传统长按动作执行失败，回退到坐标长按")
+                        executeCoordinateLongClick(activity, element)
+                    }
+                }
+            }
+        } else {
+            Log.w(TAG, "目标元素不可长按或未启用，直接使用坐标长按")
+            executeCoordinateLongClick(activity, element)
+        }
+    }
+
+    /**
+     * 传统的长按操作回退方法
+     * 利用页面变化监听机制验证长按效果
+     * @param activity 当前Activity
+     * @param element 目标元素
+     * @param preLongClickActivity 长按前的Activity
+     * @param preLongClickMonitoredActivity 长按前监听的Activity
+     * @param preLongClickViewTreeHash 长按前页面元素树的哈希值
+     */
+    private fun fallbackLongClickAction(
+        activity: Activity, 
+        element: GenericElement,
+        preLongClickActivity: Activity?,
+        preLongClickMonitoredActivity: Activity?,
+        preLongClickViewTreeHash: Int?
+    ) {
+        Log.d(TAG, "执行传统长按回退操作")
         ElementController.longClickElement(activity, element.resourceId) { success ->
             if (success) {
-                Log.d(TAG, "长按动作执行成功")
+                screenNeedUpdate = true
+                xmlPending = true
+                Log.d(TAG, "传统长按回退操作返回成功，等待页面变化验证...")
+                verifyLongClickSuccessWithPageChange(preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash) { verified ->
+                    if (verified) {
+                        Log.d(TAG, "传统长按回退成功且已验证生效")
+                        
+                    } else {
+                        Log.w(TAG, "传统长按回退操作成功但未生效，回退到坐标长按")
+                        executeCoordinateLongClick(activity, element)
+                    }
+                }
+            } else {
+                Log.w(TAG, "传统长按回退操作失败，回退到坐标长按")
+                executeCoordinateLongClick(activity, element)
+            }
+        }
+    }
+
+    /**
+     * 执行坐标长按操作
+     * @param activity 当前Activity
+     * @param element 目标元素
+     */
+    private fun executeCoordinateLongClick(activity: Activity, element: GenericElement) {
+        Log.d(TAG, "执行坐标长按操作 - 元素: ${element.resourceId}")
+        longClickByCoordinateDP(activity, element) { success ->
+            if (success) {
+                Log.d(TAG, "坐标长按操作成功")
                 screenNeedUpdate = true
                 xmlPending = true
             } else {
-                Log.e(TAG, "长按动作执行失败")
-                sendActionError("长按动作执行失败")
+                Log.e(TAG, "坐标长按操作失败")
+                sendActionError("长按动作执行失败", "所有长按方式均失败")
             }
+        }
+    }
+
+    /**
+     * 验证长按操作是否成功，通过检测页面变化
+     * 复用点击操作的页面验证机制
+     * @param preLongClickActivity 长按前的Activity
+     * @param preLongClickMonitoredActivity 长按前监听的Activity
+     * @param preLongClickViewTreeHash 长按前页面元素树的哈希值
+     * @param callback 验证结果回调
+     */
+    private fun verifyLongClickSuccessWithPageChange(
+        preLongClickActivity: Activity?,
+        preLongClickMonitoredActivity: Activity?,
+        preLongClickViewTreeHash: Int?,
+        callback: (Boolean) -> Unit
+    ) {
+        var verificationCompleted = false
+        val startTime = System.currentTimeMillis()
+        
+        // 使用传入的长按前状态
+        val initialActivity = preLongClickActivity
+        val initialActivityName = initialActivity?.javaClass?.simpleName ?: "null"
+        val initialMonitoredActivity = preLongClickMonitoredActivity
+        val initialViewTreeHash = preLongClickViewTreeHash
+        
+        Log.d(TAG, "开始长按页面变化验证 - 长按前状态: Activity=$initialActivityName, 监听Activity=${initialMonitoredActivity?.javaClass?.simpleName}, 视图树哈希=${initialViewTreeHash}")
+        
+        // 创建一个检查器，定期检查页面状态变化
+        val checkPageChangeRunnable = object : Runnable {
+            override fun run() {
+                if (verificationCompleted) return
+                
+                val currentTime = System.currentTimeMillis()
+                val elapsed = currentTime - startTime
+                val currentActivity = ActivityTracker.getCurrentActivity()
+                val currentActivityName = currentActivity?.javaClass?.simpleName ?: "null"
+                
+                // 检查Activity变化
+                val hasActivityChange = currentActivity != initialActivity
+                
+                // 检查监听Activity变化
+                val hasMonitoredActivityChange = currentMonitoredActivity != initialMonitoredActivity
+                
+                // 检查页面元素树变化
+                var hasViewTreeChange = false
+                if (initialViewTreeHash != null && currentActivity != null) {
+                    try {
+                        val rootView = currentActivity.window?.decorView?.rootView
+                        if (rootView != null) {
+                            val currentViewTreeHash = getViewTreeHash(rootView)
+                            hasViewTreeChange = currentViewTreeHash != initialViewTreeHash
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "检查长按视图树变化时发生异常", e)
+                    }
+                }
+                
+                // 综合判断是否有页面变化
+                val hasPageChange = hasActivityChange || hasMonitoredActivityChange || hasViewTreeChange
+                
+                if (hasPageChange) {
+                    verificationCompleted = true
+                    
+                    val changeReason = when {
+                        hasActivityChange -> "Activity变化 ($initialActivityName -> $currentActivityName)"
+                        hasMonitoredActivityChange -> "监听Activity变化 (${initialMonitoredActivity?.javaClass?.simpleName} -> ${currentMonitoredActivity?.javaClass?.simpleName})"
+                        hasViewTreeChange -> "页面元素树变化"
+                        else -> "未知变化"
+                    }
+                    
+                    Log.d(TAG, "检测到页面变化，长按验证成功 - 变化原因: $changeReason")
+                    callback(true)
+                } else if (elapsed >= 1000) {
+                    // 超时，认为长按未生效
+                    verificationCompleted = true
+                    
+                    Log.d(TAG, "长按验证超时，未检测到页面变化 - 当前状态: Activity=$currentActivityName, 监听Activity=${currentMonitoredActivity?.javaClass?.simpleName}")
+                    callback(false)
+                } else {
+                    // 继续检查
+                    mainThreadHandler.postDelayed(this, 100) // 每100ms检查一次，提高响应速度
+                }
+            }
+        }
+        
+        // 开始检查
+        mainThreadHandler.postDelayed(checkPageChangeRunnable, 100) // 首次检查延迟100ms
+    }
+
+    /**
+     * 通过dp坐标执行长按操作
+     * @param activity 当前Activity
+     * @param targetElement 目标元素
+     * @param callback 操作结果回调
+     */
+    private fun longClickByCoordinateDP(activity: Activity, targetElement: GenericElement, callback: (Boolean) -> Unit) {
+        Log.d(TAG, "开始通过dp坐标执行长按操作")
+        
+        try {
+            val bounds = targetElement.bounds
+            val centerX = bounds.centerX()
+            val centerY = bounds.centerY()
+            
+            Log.d(TAG, "长按坐标: ($centerX, $centerY)")
+            
+            // 根据页面类型调用相应的长按方法
+            val currentActivity = ActivityTracker.getCurrentActivity()
+            if (currentActivity != null) {
+                ElementController.longClickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
+                    Log.d(TAG, "dp坐标长按操作结果: $success")
+                    callback(success)
+                }
+            } else {
+                Log.e(TAG, "无法获取当前Activity，长按操作失败")
+                callback(false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "dp坐标长按操作异常", e)
+            callback(false)
         }
     }
 
@@ -1037,7 +1287,7 @@ class MobileService : Service() {
     /**
      * 执行回到主页动作
      */
-    private fun executeGoHomeAction(activity: Activity) {
+    private fun executeGoHomeAction(activity: Activity,) {
         controller.NativeController.goToAppHome(activity) { success ->
             if (success) {
                 Log.d(TAG, "回到主页动作执行成功")
@@ -1051,20 +1301,25 @@ class MobileService : Service() {
     }
 
     /**
-     * 发送动作错误信息
+     * 发送动作错误信息（带最新截图）
      */
     private fun sendActionError(errorMessage: String, remark: String = "") {
-        val message = MobileGPTMessage().apply {
-            messageType = MobileGPTMessage.TYPE_ERROR
-            errType = MobileGPTMessage.ERROR_TYPE_ACTION
-            errMessage = errorMessage
-            curXml = currentScreenXML    // 包含当前的XML
-            preXml = previousScreenXML   // 包含上一次的XML
-            action = currentAction       // 包含当前执行的动作
-            instruction = currentInstruction // 包含当前发送的指令
-            this.remark = remark
+        // 先强制更新截图，然后发送错误信息
+        saveCurrentScreenShot {
+            val message = MobileGPTMessage().apply {
+                messageType = MobileGPTMessage.TYPE_ERROR
+                errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                errMessage = errorMessage
+                curXml = currentScreenXML    // 包含当前的XML
+                preXml = previousScreenXML   // 包含上一次的XML
+                action = currentAction       // 包含当前执行的动作
+                instruction = currentInstruction // 包含当前发送的指令
+                this.remark = remark
+                // 添加最新更新的截图
+                screenshot = currentScreenShot
+            }
+            mExecutorService.execute { mClient?.sendMessage(message) }
         }
-        mExecutorService.execute { mClient?.sendMessage(message) }
     }
     
     /**
@@ -1537,30 +1792,35 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     }
 
     /**
-     * 发送XML未变化的错误信息
+     * 发送XML未变化的错误信息（带最新截图）
      */
     private fun sendXmlUnchangedError() {
         val errorMessage = "点击执行动作之后，View视图发生了变化，但是当前XML的元素没有发生变化。请结合当前XML确认当前动作和任务是否执行成功。"
         Log.d(TAG, "发送XML未变化错误: $errorMessage")
         
-        val message = MobileGPTMessage().apply {
-            messageType = MobileGPTMessage.TYPE_ERROR
-            errType = MobileGPTMessage.ERROR_TYPE_ACTION
-            errMessage = errorMessage
-            curXml = currentScreenXML    // 包含当前的XML
-            preXml = previousScreenXML   // 包含上一次的XML
-            action = currentAction       // 包含当前执行的动作
-            instruction = currentInstruction // 包含当前发送的指令
+        // 先强制更新截图，然后发送错误信息
+        saveCurrentScreenShot {
+            val message = MobileGPTMessage().apply {
+                messageType = MobileGPTMessage.TYPE_ERROR
+                errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                errMessage = errorMessage
+                curXml = currentScreenXML    // 包含当前的XML
+                preXml = previousScreenXML   // 包含上一次的XML
+                action = currentAction       // 包含当前执行的动作
+                instruction = currentInstruction // 包含当前发送的指令
+                // 添加最新更新的截图
+                screenshot = currentScreenShot
+            }
+            
+            mExecutorService.execute { 
+                mClient?.sendMessage(message)
+            }
+            
+            // 发送错误信息后，重置状态变量
+            screenNeedUpdate = false
+            xmlPending = false
+            firstScreen = false
         }
-        
-        mExecutorService.execute { 
-            mClient?.sendMessage(message)
-        }
-        
-        // 发送错误信息后，重置状态变量
-        screenNeedUpdate = false
-        xmlPending = false
-        firstScreen = false
     }
 
     /**
@@ -1615,7 +1875,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     }
 
     /**
-     * 设置操作失败回调
+     * 设置操作失败回调（带最新截图）
      */
     private fun setActionFailedRunnable(reason: String, delay: Int) {
         actionFailedRunnable?.let {
@@ -1623,16 +1883,21 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         }
         actionFailedRunnable = Runnable {
             Log.e(TAG, reason)
-            val message = MobileGPTMessage().apply {
-                messageType = MobileGPTMessage.TYPE_ERROR
-                errType = MobileGPTMessage.ERROR_TYPE_ACTION
-                errMessage = reason
-                curXml = currentScreenXML    // 包含当前的XML
-                preXml = previousScreenXML   // 包含上一次的XML
-                action = currentAction       // 包含当前执行的动作
-                instruction = currentInstruction // 包含当前发送的指令
+            // 先强制更新截图，然后发送错误信息
+            saveCurrentScreenShot {
+                val message = MobileGPTMessage().apply {
+                    messageType = MobileGPTMessage.TYPE_ERROR
+                    errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                    errMessage = reason
+                    curXml = currentScreenXML    // 包含当前的XML
+                    preXml = previousScreenXML   // 包含上一次的XML
+                    action = currentAction       // 包含当前执行的动作
+                    instruction = currentInstruction // 包含当前发送的指令
+                    // 添加最新更新的截图
+                    screenshot = currentScreenShot
+                }
+                mExecutorService.execute { mClient?.sendMessage(message) }
             }
-            mExecutorService.execute { mClient?.sendMessage(message) }
         }
         actionFailedRunnable?.let {
             mainThreadHandler.postDelayed(it, delay.toLong())

@@ -144,6 +144,63 @@ object ElementController {
         }
     }
 
+    /**
+     * 使用GenericElement中的view引用直接进行长按操作
+     * @param element 包含view引用的GenericElement对象
+     * @param callback 长按操作的回调函数
+     */
+    fun longClickElementByView(element: GenericElement, callback: (Boolean) -> Unit) {
+        try {
+            val view = element.view
+            if (view != null && view.isLongClickable && view.isEnabled) {
+                Log.d(TAG, "开始执行view引用长按操作")
+                
+                // 在主线程中执行长按操作
+                view.post {
+                    try {
+                        Log.d(TAG, "执行view.performLongClick()")
+                        val result = view.performLongClick()
+                        Log.d(TAG, "view.performLongClick()结果: $result")
+                        callback(result)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "长按操作失败: ${e.message}")
+                        callback(false)
+                    }
+                }
+            } else {
+                Log.w(TAG, "View不可长按或不可用: view=${view}, longClickable=${view?.isLongClickable}, enabled=${view?.isEnabled}")
+                callback(false)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "长按元素时发生异常: ${e.message}")
+            callback(false)
+        }
+    }
+
+    /**
+     * 通过坐标进行长按操作（dp版本）
+     * @param activity 当前Activity
+     * @param xDp 长按的X坐标（dp单位）
+     * @param yDp 长按的Y坐标（dp单位）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun longClickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
+        // 使用NativeController的坐标长按功能
+        when (PageSniffer.getCurrentPageType(activity)) {
+            PageSniffer.PageType.NATIVE -> {
+                NativeController.longClickByCoordinateDp(activity, xDp.toFloat(), yDp.toFloat()) { success ->
+                    callback(success)
+                }
+            }
+            else -> {
+                // 对于其他类型，尝试使用ElementController
+                Log.d(TAG,"其他类型页面进行坐标长按")
+                // 可以在这里添加其他页面类型的坐标长按支持
+                callback(false)
+            }
+        }
+    }
+
 
     private fun String.escapeXml(): String {
         return this.replace("&", "&amp;")

@@ -191,6 +191,11 @@ class CustomDatePickerView @JvmOverloads constructor(
         return button
     }
 
+    /**
+     * 更新日期按钮的样式和选中状态
+     * @param button 日期按钮
+     * @param day 日期数字
+     */
     private fun updateDateButtonStyle(button: TextView, day: Int) {
         val calendar = currentCalendar.clone() as Calendar
         calendar.set(Calendar.DAY_OF_MONTH, day)
@@ -208,6 +213,9 @@ class CustomDatePickerView @JvmOverloads constructor(
             calendar.get(Calendar.MONTH) == Calendar.getInstance().apply { time = selected }.get(Calendar.MONTH) &&
             calendar.get(Calendar.DAY_OF_MONTH) == Calendar.getInstance().apply { time = selected }.get(Calendar.DAY_OF_MONTH)
         } ?: false
+
+        // 重要：同步选中状态到View的isSelected属性，以便NativeController能够正确解析
+        button.isSelected = isSelected
 
         when {
             isSelected -> {
@@ -241,14 +249,14 @@ class CustomDatePickerView @JvmOverloads constructor(
         selectedDate = calendar.time
 
 //        // // 更新显示
-        updateDisplay()
+       updateDisplay()
 
 
         // 自动确认选择的日期并关闭日期选择器
-//        selectedDate?.let { date ->
-//            onDateSelectedListener?.invoke(date)
-//        }
-//        hide()
+        // selectedDate?.let { date ->
+        //     onDateSelectedListener?.invoke(date)
+        // }
+        // hide()
     }
 
     /**
