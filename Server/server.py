@@ -1,29 +1,33 @@
 import json
 import os
+import sys
 import socket
 import threading
 import queue
 import time
 from typing import Optional
 
-from log_config import log, setup_logging, log_with_color, log_system_status
-from screenParser.Encoder import xmlEncoder
-from mobilegpt import MobileGPT
-from agents.task_agent import TaskAgent
-from datetime import datetime
-from utils.mongo_utils import check_connection, get_connection_info, close_connection
-from env_config import Config
-from session_manager import SessionManager, ClientSession, resource_lock
-from async_processor import async_processor, message_queue
-import sys
-
-# 添加项目根目录到系统路径
+# 添加项目根目录到系统路径（必须在其他import之前）
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
+from log_config import log, setup_logging, log_system_status
+from screenParser.Encoder import xmlEncoder
+from mobilegpt import MobileGPT
+from agents.task_agent import TaskAgent
+from datetime import datetime
+from utils.mongo_utils import check_connection, get_connection_info, close_connection, get_db
+from env_config import Config
+from session_manager import SessionManager, ClientSession
+from async_processor import async_processor, message_queue
 from Reflector_Agent.base import AgentMemory
 from Reflector_Agent.reflector import Reflector
+from utils.mongo_utils import reconnect
+import traceback
+from screenParser import parseXML
+import xml.etree.ElementTree as ET
+
 
 class Server:
     def __init__(self, host=None, port=None, buffer_size=None):
@@ -49,7 +53,7 @@ class Server:
         if self.enable_db:
             if not check_connection():
                 log("MongoDB连接检查失败，尝试重新连接...", "yellow")
-                from utils.mongo_utils import reconnect
+                
                 if not reconnect():
                     log("MongoDB连接失败，将使用文件系统存储", "red")
                     self.enable_db = False
@@ -260,9 +264,15 @@ class Server:
                 if len(error_data) != message_length:
                     return None
                 error_content = error_data.decode('utf-8')
+                
+                # 解析错误消息以提取截图数据
+                error_info = self._parse_error_message(error_content)
+                screenshot_data = error_info.get('screenshot', None)
+                
                 return {
                     'messageType': 'error',
-                    'error': error_content
+                    'error': error_content,
+                    'screenshot': screenshot_data
                 }
             elif message_type == 'G':
                 # 获取操作消息
@@ -411,7 +421,7 @@ class Server:
             
         except Exception as e:
             log(f"指令处理失败: {e}", "red")
-            import traceback
+            
             traceback.print_exc()
 
     def _handle_xml_message(self, session: ClientSession, message: dict):
@@ -420,8 +430,8 @@ class Server:
         xml_length = len(xml_content) if xml_content else 0
         log(f"收到XML数据: 长度={xml_length}字符", "cyan")
         
-        # 异步处理XML
-        self._process_xml_async(session, xml_content)
+        # 使用优化版本处理XML
+        self._process_xml_optimized(session, xml_content)
 
     def _process_xml_async(self, session: ClientSession, xml_content: str):
         """异步处理XML，保持功能稳定性"""
@@ -476,10 +486,61 @@ class Server:
             log(f"异步XML处理失败: {e}，回退到同步处理", "red")
             # 回退到同步处理，确保功能稳定性
             self._process_xml_directly(session, xml_content)
+    
+    def _process_xml_optimized(self, session: ClientSession, xml_content: str):
+        """使用优化版本处理XML"""
+        try:
+            if not self._is_mobilegpt_ready(session):
+                log("MobileGPT实例未准备就绪，等待指令处理完成", "yellow")
+                self._wait_for_mobilegpt(session, xml_content, max_wait=10)
+                return
+            
+            log("开始优化版本XML处理", "green")
+            
+            # 解析XML数据
+            screen_parser = xmlEncoder()
+            parsed_xml = parseXML.parse(xml_content)
+            hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
+            tree = ET.fromstring(parsed_xml)
+            for element in tree.iter():
+                for k in ("bounds", "important", "class"):
+                    if k in element.attrib:
+                        del element.attrib[k]
+            encoded_xml = ET.tostring(tree, encoding='unicode')
+            
+            # 使用优化版本的MobileGPT
+            mobilegpt = session.mobilegpt
+            use_optimization = os.getenv("MOBILEGPT_OPTIMIZATION", "true").lower() == "true"
+            
+            if use_optimization and hasattr(mobilegpt, 'get_next_action_optimized'):
+                # 使用异步优化版本
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    action = loop.run_until_complete(
+                        mobilegpt.get_next_action_optimized(parsed_xml, hierarchy_xml, encoded_xml)
+                    )
+                finally:
+                    loop.close()
+            else:
+                # 回退到同步版本
+                action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
+            
+            if action:
+                log(f"MobileGPT返回动作: {action}", "green")
+                self._send_action_to_client(session, action)
+            else:
+                log("MobileGPT未返回动作", "yellow")
+                
+        except Exception as e:
+            log(f"优化版本XML处理失败: {e}", "red")
+            traceback.print_exc()
+            # 回退到原始处理方式
+            self._process_xml_directly(session, xml_content)
 
     def _wait_for_mobilegpt(self, session: ClientSession, xml_content: str, max_wait: int = 15):
         """等待MobileGPT实例准备就绪"""
-        import time
         
         start_time = time.time()
         log(f"开始等待MobileGPT实例准备就绪，最多等待{max_wait}秒", "blue")
@@ -518,13 +579,7 @@ class Server:
             log("开始处理XML内容", "green")
             
             # 解析XML数据
-            from screenParser.Encoder import xmlEncoder
-            from env_config import Config
-            import os
-            # 本同步路径也改为不落盘，仅用于生成推理输入
             screen_parser = xmlEncoder()
-            from screenParser import parseXML
-            import xml.etree.ElementTree as ET
             parsed_xml = parseXML.parse(xml_content)
             hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
             tree = ET.fromstring(parsed_xml)
@@ -562,7 +617,6 @@ class Server:
                 
         except Exception as e:
             log(f"处理XML内容失败: {e}", "red")
-            import traceback
             traceback.print_exc()
 
     def _process_xml_directly(self, session: ClientSession, xml_content: str):
@@ -575,13 +629,7 @@ class Server:
             log("使用MobileGPT直接处理XML", "green")
             
             # 解析XML数据
-            from screenParser.Encoder import xmlEncoder
-            from env_config import Config
-            import os
-            # 同步路径：不落盘，仅解析
             screen_parser = xmlEncoder()
-            from screenParser import parseXML
-            import xml.etree.ElementTree as ET
             parsed_xml = parseXML.parse(xml_content)
             hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
             tree = ET.fromstring(parsed_xml)
@@ -606,7 +654,6 @@ class Server:
                 
         except Exception as e:
             log(f"MobileGPT处理XML失败: {e}", "red")
-            import traceback
             traceback.print_exc()
 
     def _send_action_to_client(self, session: ClientSession, action: dict):
@@ -723,13 +770,16 @@ class Server:
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
-        log("收到错误消息", "red")
+        screenshot_data = message.get('screenshot', None)
+        
+        if screenshot_data:
+            log(f"收到错误消息，包含截图数据: {len(screenshot_data)}字节", "red")
+        else:
+            log("收到错误消息，无截图数据", "red")
 
         # 获取必要的变量
         client_socket = session.client_socket
-        mobileGPT = getattr(session, 'mobilegpt', None)
-        # screen_count = getattr(session, 'screen_count', 0)
-        
+        mobileGPT = getattr(session, 'mobilegpt', None)        
         # 检查必要的依赖
         if not client_socket:
             log("客户端socket不存在，无法处理错误消息", "red")
@@ -865,9 +915,6 @@ class Server:
             return
             
         try:
-            # 仅解析，不落盘
-            from screenParser import parseXML
-            import xml.etree.ElementTree as ET
             parsed_xml = parseXML.parse(current_xml)
             hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
             tree = ET.fromstring(parsed_xml)
@@ -1004,9 +1051,6 @@ class Server:
             return
             
         try:
-            # 仅解析，不落盘
-            from screenParser import parseXML
-            import xml.etree.ElementTree as ET
             parsed_xml = parseXML.parse(current_xml)
             hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
             tree = ET.fromstring(parsed_xml)
@@ -1097,9 +1141,7 @@ class Server:
     
     
     def _save_xml_to_mongo(self, xml_data, screen_count, xml_type):
-        """将XML数据保存到MongoDB（无 app 维度）"""
-        from utils.mongo_utils import get_db
-        
+        """将XML数据保存到MongoDB（无 app 维度）"""      
         try:
             db = get_db()
             collection = db['temp_xmls']
@@ -1142,14 +1184,28 @@ class Server:
                 error_info['instruction'] = line[12:].strip()
             elif line.startswith('REMARK:'):
                 error_info['remark'] = line[7:].strip()
+            elif line.startswith('SCREENSHOT:'):
+                # 处理截图信息（Base64编码）
+                screenshot_data = line[11:].strip()
+                if screenshot_data:
+                    try:
+                        import base64
+                        # 解码Base64数据为字节
+                        error_info['screenshot'] = base64.b64decode(screenshot_data)
+                        log(f"解析到截图数据: {len(error_info['screenshot'])}字节", "blue")
+                    except Exception as e:
+                        log(f"截图数据解码失败: {e}", "red")
+                        error_info['screenshot'] = None
+                else:
+                    error_info['screenshot'] = None
             elif line == 'PRE_XML:':
                 # 找到PRE_XML标记，收集后续XML内容直到下一个标记
                 xml_lines = []
                 i += 1
                 while i < len(lines):
                     xml_line = lines[i]
-                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:'] or \
-                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:'] or \
+                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
                         i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
@@ -1162,8 +1218,8 @@ class Server:
                 i += 1
                 while i < len(lines):
                     xml_line = lines[i]
-                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:'] or \
-                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:'] or \
+                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
                         i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
@@ -1182,7 +1238,6 @@ class Server:
 
     def _db_worker(self):
         """后台DB写入线程：批量、合并策略"""
-        from utils.mongo_utils import get_db
         db = None
         collection_xml = None
         collection_shot = None
@@ -1263,7 +1318,6 @@ class Server:
                 if self.enable_db:
                     if not check_connection():
                         log("MongoDB连接异常，尝试重连...", "yellow")
-                        from utils.mongo_utils import reconnect
                         if reconnect():
                             log("MongoDB重连成功", "green")
                         else:
