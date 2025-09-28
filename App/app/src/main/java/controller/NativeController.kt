@@ -16,6 +16,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.*
+import androidx.core.content.ContextCompat.startActivity
+import com.example.emplab.MainActivity
 
 object NativeController {
     
@@ -240,9 +242,78 @@ object NativeController {
         val targetView = findViewByResourceName(rootView, elementId)
         
         if (targetView != null && targetView.isEnabled && targetView.isLongClickable) {
-            targetView.performLongClick()
-            callback(true)
+            val result = targetView.performLongClick()
+            callback(result)
         } else {
+            callback(false)
+        }
+    }
+    
+    /**
+     * 根据dp坐标长按屏幕位置，并显示发光效果
+     * @param activity Activity对象
+     * @param xDp 长按位置的x坐标（dp）
+     * @param yDp 长按位置的y坐标（dp）
+     * @param callback 长按结果回调
+     */
+    fun longClickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
+        val xPx = UIUtils.dpToPx(activity, xDp)
+        val yPx = UIUtils.dpToPx(activity, yDp)-UIUtils.getStatusBarHeight(activity)
+        
+        // 打印坐标转换信息
+        Log.d("longClickByCoordinate", "输入坐标 - xDp: $xDp, yDp: $yDp")
+        Log.d("longClickByCoordinate", "转换后并减去系统栏的坐标 - xPx: $xPx, yPx: $yPx")
+        Log.d("longClickByCoordinate", "屏幕密度: ${activity.resources.displayMetrics.density}")
+        Log.d("longClickByCoordinate", "状态栏高度: ${UIUtils.getStatusBarHeight(activity)}px")
+        
+        // 显示发光效果（现在使用相同的坐标系统）
+        UIUtils.showGlowEffect(activity, xPx, yPx)
+        
+        // 执行长按操作
+        longClickByCoordinate(activity, xPx, yPx, callback)
+    }
+    
+    /**
+     * 通过坐标长按元素（px版本）
+     * @param activity 当前Activity
+     * @param x 长按的X坐标（px单位）
+     * @param y 长按的Y坐标（px单位）
+     * @param callback 回调函数，返回操作是否成功
+     */
+    fun longClickByCoordinate(activity: Activity, x: Float, y: Float, callback: (Boolean) -> Unit) {
+        try {
+            // 获取整个Activity根视图
+            val rootView = activity.findViewById<View>(android.R.id.content)
+            
+            // 创建ACTION_DOWN事件
+            val downTime = SystemClock.uptimeMillis()
+            val downEvent = MotionEvent.obtain(
+                downTime, downTime, MotionEvent.ACTION_DOWN, x, y, 0
+            )
+            
+            // 分发ACTION_DOWN事件
+            val downResult = rootView.dispatchTouchEvent(downEvent)
+            
+            // 长按需要保持按下状态一段时间（通常500ms以上）
+            Thread.sleep(600) // 长按持续时间
+            
+            // 创建ACTION_UP事件
+            val upTime = SystemClock.uptimeMillis()
+            val upEvent = MotionEvent.obtain(
+                downTime, upTime, MotionEvent.ACTION_UP, x, y, 0
+            )
+            
+            // 分发ACTION_UP事件
+            val upResult = rootView.dispatchTouchEvent(upEvent)
+            
+            // 清理事件对象
+            downEvent.recycle()
+            upEvent.recycle()
+            
+            callback(downResult && upResult)
+            
+        } catch (e: Exception) {
+            Log.e("longClickByCoordinate", "长按操作失败: ${e.message}")
             callback(false)
         }
     }
@@ -840,14 +911,18 @@ object NativeController {
      */
     fun goToAppHome(activity: Activity, callback: (Boolean) -> Unit) {
         try {
-            // 清除所有Activity之上的任务栈，使当前Activity成为栈顶Activity
-            val intent = activity.intent
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            activity.startActivity(intent)
+            Log.d("NativeController", "开始执行返回APP主页操作")
+            // 调用返回主页函数
+            val mainIntent = Intent(activity, MainActivity::class.java)
+            mainIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            mainIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            Log.d("NativeController", "准备启动MainActivity")
+            activity.startActivity(mainIntent)
+            Log.d("NativeController", "已成功启动MainActivity")
             
             callback(true)
         } catch (e: Exception) {
+            Log.e("NativeController", "返回APP主页操作失败", e)
             callback(false)
         }
     }

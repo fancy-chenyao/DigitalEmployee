@@ -696,6 +696,30 @@ class Server:
         qa_content = message.get('qa', '')
         log(f"收到问答消息: {qa_content}", "blue")
 
+        # 解析格式：info_name\question\answer
+        try:
+            info_name, question, answer = qa_content.split("\\", 2)
+        except Exception:
+            log("问答消息格式无效，期望格式为 info_name\\question\\answer", "red")
+            return
+
+        # 检查 MobileGPT 实例
+        mobilegpt = getattr(session, 'mobilegpt', None)
+        if not mobilegpt:
+            log("MobileGPT实例不存在，无法处理问答", "red")
+            return
+
+        # 写入答案并尝试继续生成动作
+        try:
+            action = mobilegpt.set_qa_answer(info_name, question, answer)
+            if action:
+                log(f"问答生效，发送后续动作: {action}", "green")
+                self._send_action_to_client(session, action)
+            else:
+                log("问答已记录，但未返回动作", "yellow")
+        except Exception as e:
+            log(f"处理问答时发生异常: {e}", "red")
+
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
