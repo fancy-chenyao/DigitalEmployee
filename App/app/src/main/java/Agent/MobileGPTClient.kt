@@ -88,7 +88,7 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
                     }
                     MobileGPTMessage.TYPE_ERROR -> {
                         dos?.writeByte('E'.code)
-                        // 构建包含preXml的错误消息
+                        // 构建包含preXml和Base64截图的错误消息
                         val errorData = buildErrorData(message)
                         val size = errorData.toByteArray(Charsets.UTF_8).size
                         val fileSize = "$size\n"
@@ -245,6 +245,15 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
         // 如果有备注信息，也包含进去
         if (message.remark.isNotEmpty()) {
             errorData.append("REMARK:${message.remark}\n")
+        }
+        
+        // 如果有截图，添加Base64编码的截图数据
+        if (message.screenshot != null) {
+            val screenshotBytes = message.getScreenshotBytes()
+            if (screenshotBytes != null) {
+                val base64Screenshot = android.util.Base64.encodeToString(screenshotBytes, android.util.Base64.DEFAULT)
+                errorData.append("SCREENSHOT_DATA:$base64Screenshot\n")
+            }
         }
         
         return errorData.toString()

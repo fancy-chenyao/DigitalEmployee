@@ -1051,20 +1051,25 @@ class MobileService : Service() {
     }
 
     /**
-     * 发送动作错误信息
+     * 发送动作错误信息（带最新截图）
      */
     private fun sendActionError(errorMessage: String, remark: String = "") {
-        val message = MobileGPTMessage().apply {
-            messageType = MobileGPTMessage.TYPE_ERROR
-            errType = MobileGPTMessage.ERROR_TYPE_ACTION
-            errMessage = errorMessage
-            curXml = currentScreenXML    // 包含当前的XML
-            preXml = previousScreenXML   // 包含上一次的XML
-            action = currentAction       // 包含当前执行的动作
-            instruction = currentInstruction // 包含当前发送的指令
-            this.remark = remark
+        // 先强制更新截图，然后发送错误信息
+        saveCurrentScreenShot {
+            val message = MobileGPTMessage().apply {
+                messageType = MobileGPTMessage.TYPE_ERROR
+                errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                errMessage = errorMessage
+                curXml = currentScreenXML    // 包含当前的XML
+                preXml = previousScreenXML   // 包含上一次的XML
+                action = currentAction       // 包含当前执行的动作
+                instruction = currentInstruction // 包含当前发送的指令
+                this.remark = remark
+                // 添加最新更新的截图
+                screenshot = currentScreenShot
+            }
+            mExecutorService.execute { mClient?.sendMessage(message) }
         }
-        mExecutorService.execute { mClient?.sendMessage(message) }
     }
     
     /**
@@ -1537,30 +1542,35 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     }
 
     /**
-     * 发送XML未变化的错误信息
+     * 发送XML未变化的错误信息（带最新截图）
      */
     private fun sendXmlUnchangedError() {
         val errorMessage = "点击执行动作之后，View视图发生了变化，但是当前XML的元素没有发生变化。请结合当前XML确认当前动作和任务是否执行成功。"
         Log.d(TAG, "发送XML未变化错误: $errorMessage")
         
-        val message = MobileGPTMessage().apply {
-            messageType = MobileGPTMessage.TYPE_ERROR
-            errType = MobileGPTMessage.ERROR_TYPE_ACTION
-            errMessage = errorMessage
-            curXml = currentScreenXML    // 包含当前的XML
-            preXml = previousScreenXML   // 包含上一次的XML
-            action = currentAction       // 包含当前执行的动作
-            instruction = currentInstruction // 包含当前发送的指令
+        // 先强制更新截图，然后发送错误信息
+        saveCurrentScreenShot {
+            val message = MobileGPTMessage().apply {
+                messageType = MobileGPTMessage.TYPE_ERROR
+                errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                errMessage = errorMessage
+                curXml = currentScreenXML    // 包含当前的XML
+                preXml = previousScreenXML   // 包含上一次的XML
+                action = currentAction       // 包含当前执行的动作
+                instruction = currentInstruction // 包含当前发送的指令
+                // 添加最新更新的截图
+                screenshot = currentScreenShot
+            }
+            
+            mExecutorService.execute { 
+                mClient?.sendMessage(message)
+            }
+            
+            // 发送错误信息后，重置状态变量
+            screenNeedUpdate = false
+            xmlPending = false
+            firstScreen = false
         }
-        
-        mExecutorService.execute { 
-            mClient?.sendMessage(message)
-        }
-        
-        // 发送错误信息后，重置状态变量
-        screenNeedUpdate = false
-        xmlPending = false
-        firstScreen = false
     }
 
     /**
@@ -1615,7 +1625,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
     }
 
     /**
-     * 设置操作失败回调
+     * 设置操作失败回调（带最新截图）
      */
     private fun setActionFailedRunnable(reason: String, delay: Int) {
         actionFailedRunnable?.let {
@@ -1623,16 +1633,21 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
         }
         actionFailedRunnable = Runnable {
             Log.e(TAG, reason)
-            val message = MobileGPTMessage().apply {
-                messageType = MobileGPTMessage.TYPE_ERROR
-                errType = MobileGPTMessage.ERROR_TYPE_ACTION
-                errMessage = reason
-                curXml = currentScreenXML    // 包含当前的XML
-                preXml = previousScreenXML   // 包含上一次的XML
-                action = currentAction       // 包含当前执行的动作
-                instruction = currentInstruction // 包含当前发送的指令
+            // 先强制更新截图，然后发送错误信息
+            saveCurrentScreenShot {
+                val message = MobileGPTMessage().apply {
+                    messageType = MobileGPTMessage.TYPE_ERROR
+                    errType = MobileGPTMessage.ERROR_TYPE_ACTION
+                    errMessage = reason
+                    curXml = currentScreenXML    // 包含当前的XML
+                    preXml = previousScreenXML   // 包含上一次的XML
+                    action = currentAction       // 包含当前执行的动作
+                    instruction = currentInstruction // 包含当前发送的指令
+                    // 添加最新更新的截图
+                    screenshot = currentScreenShot
+                }
+                mExecutorService.execute { mClient?.sendMessage(message) }
             }
-            mExecutorService.execute { mClient?.sendMessage(message) }
         }
         actionFailedRunnable?.let {
             mainThreadHandler.postDelayed(it, delay.toLong())
