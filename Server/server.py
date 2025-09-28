@@ -775,6 +775,11 @@ class Server:
             else:
                 # 不需要回退，根据问题类型处理
                 advice = reflection.advice
+                # 构建建议的结构
+                suggestion = {
+                    "action": error_info.get('action', 'None'),
+                    "advice": advice
+                }
                 if reflection.problem_type == 'task':
                     # 获取MobileGPT实例并调用方法
                     mobilegpt = getattr(session, 'mobilegpt', None)
@@ -782,7 +787,7 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=advice)
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=[suggestion])
                     
                 else:
                     # 获取MobileGPT实例并调用方法
@@ -791,7 +796,7 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=advice)
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=[suggestion])
             
                 if action:
                     log(f"MobileGPT返回动作: {action}", "green")
