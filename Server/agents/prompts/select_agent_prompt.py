@@ -73,10 +73,12 @@ def get_usr_prompt(instruction, subtask_history, qa_history, screen, suggestions
 
     usr_msg = ""
     if len(suggestions) > 0:
+        error_action = suggestions['出错的动作']
+        advice = suggestions['建议']
         usr_msg += (
-            "***Useful Suggestions***:\n"
-            "Consider the following suggestions when selecting your next action, and avoid selecting the wrong action mentioned in the suggestions:\n"
-            f"{suggestions}\n\n"
+            "***Please note***:\n"
+            f"The action you selected previously is: {error_action}. However, an error was encountered during its execution."
+            f"Refer to the following suggestions when selecting an action: {advice}\n\n"
         )
     usr_msg += (
         f"User's Request: {instruction}\n\n"
