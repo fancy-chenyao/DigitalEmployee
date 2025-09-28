@@ -174,16 +174,13 @@ class Server:
                 return None
             
             message_type = message_type_byte.decode()
-            log(f"检测到消息类型: {message_type}", "blue")
             
             # 根据消息类型处理不同的格式
             if message_type in ['I', 'X', 'S', 'A', 'E', 'G']:
                 # 旧格式：直接读取内容
-                log(f"使用旧格式解析消息: {message_type}", "blue")
                 return self._receive_legacy_message(client_file, message_type)
             else:
                 # 新格式：JSON格式
-                log(f"使用新格式解析消息: {message_type}", "blue")
                 return self._receive_json_message(client_file, message_type)
             
         except Exception as e:
@@ -196,50 +193,37 @@ class Server:
         try:
             if message_type == 'I':
                 # 指令消息
-                log("解析指令消息", "blue")
                 instruction_line = client_file.readline()
                 if not instruction_line:
-                    log("指令消息为空", "yellow")
                     return None
                 instruction = instruction_line.decode().strip()
-                log(f"解析到指令: {instruction}", "green")
                 return {
                     'messageType': 'instruction',
                     'instruction': instruction
                 }
             elif message_type == 'X':
                 # XML消息
-                log("解析XML消息", "blue")
                 length_line = client_file.readline()
                 if not length_line:
-                    log("XML消息长度为空", "yellow")
                     return None
                 message_length = int(length_line.decode().strip())
-                log(f"XML消息长度: {message_length}字节", "blue")
                 xml_data = client_file.read(message_length)
                 if len(xml_data) != message_length:
-                    log(f"XML数据长度不匹配: 期望{message_length}, 实际{len(xml_data)}", "red")
                     return None
                 xml_content = xml_data.decode('utf-8')
-                log(f"XML解析完成: {len(xml_content)}字符", "green")
                 return {
                     'messageType': 'xml',
                     'xml': xml_content
                 }
             elif message_type == 'S':
                 # 截图消息
-                log("解析截图消息", "blue")
                 length_line = client_file.readline()
                 if not length_line:
-                    log("截图消息长度为空", "yellow")
                     return None
                 message_length = int(length_line.decode().strip())
-                log(f"截图消息长度: {message_length}字节", "blue")
                 screenshot_data = client_file.read(message_length)
                 if len(screenshot_data) != message_length:
-                    log(f"截图数据长度不匹配: 期望{message_length}, 实际{len(screenshot_data)}", "red")
                     return None
-                log(f"截图解析完成: {len(screenshot_data)}字节", "green")
                 return {
                     'messageType': 'screenshot',
                     'screenshot': screenshot_data
@@ -603,7 +587,6 @@ class Server:
             except Exception:
                 pass
             
-            log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
             # 调用MobileGPT的get_next_action方法
             action = session.mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
@@ -640,7 +623,6 @@ class Server:
             encoded_xml = ET.tostring(tree, encoding='unicode')
             
             
-            log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
             # 调用MobileGPT的get_next_action方法
             action = session.mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
@@ -677,8 +659,6 @@ class Server:
     def _handle_screenshot_message(self, session: ClientSession, message: dict):
         """处理截图消息 - 异步版本"""
         screenshot_data = message.get('screenshot', b'')
-        screenshot_size = len(screenshot_data) if screenshot_data else 0
-        log(f"收到截图数据: 大小={screenshot_size}字节", "cyan")
         
         # 异步处理截图
         self._process_screenshot_async(session, screenshot_data)
@@ -732,7 +712,6 @@ class Server:
             if hasattr(session, 'mobilegpt') and session.mobilegpt:
                 log("使用MobileGPT直接处理截图", "green")
                 # 这里可以添加截图处理逻辑
-                log("截图数据已传递给MobileGPT", "green")
             else:
                 log("MobileGPT实例不存在，跳过截图处理", "yellow")
         except Exception as e:
@@ -770,12 +749,8 @@ class Server:
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
+        log(f"收到错误消息: {message}", "red")
         screenshot_data = message.get('screenshot', None)
-        
-        if screenshot_data:
-            log(f"收到错误消息，包含截图数据: {len(screenshot_data)}字节", "red")
-        else:
-            log("收到错误消息，无截图数据", "red")
 
         # 获取必要的变量
         client_socket = session.client_socket
@@ -791,7 +766,6 @@ class Server:
 
         try:
             # 解析错误信息
-            log("解析错误消息", "red")
             error_info = self._parse_error_message(error_content)
             screen_parser = xmlEncoder()
             parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
@@ -1178,6 +1152,7 @@ class Server:
         lines = error_string.split('\n')
         
         i = 0
+        screenshot_found = False
         while i < len(lines):
             line = lines[i].strip()
             if line.startswith('ERROR_TYPE:'):
@@ -1190,15 +1165,34 @@ class Server:
                 error_info['instruction'] = line[12:].strip()
             elif line.startswith('REMARK:'):
                 error_info['remark'] = line[7:].strip()
-            elif line.startswith('SCREENSHOT:'):
+            elif line.startswith('SCREENSHOT_DATA:'):
                 # 处理截图信息（Base64编码）
-                screenshot_data = line[11:].strip()
+                screenshot_found = True
+                screenshot_lines = []
+                # 收集第一行的数据
+                first_line_data = line[15:].strip()
+                if first_line_data:
+                    screenshot_lines.append(first_line_data)
+                
+                # 继续收集后续行的截图数据，直到遇到下一个标记
+                i += 1
+                while i < len(lines):
+                    screenshot_line = lines[i]
+                    # 检查是否遇到下一个标记
+                    if screenshot_line.strip() in ['PRE_XML:', 'CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:'] or \
+                       screenshot_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:')):
+                        i -= 1  # 回退一行，让外层循环处理
+                        break
+                    screenshot_lines.append(screenshot_line.strip())
+                    i += 1
+                
+                # 合并所有截图数据
+                screenshot_data = ''.join(screenshot_lines)
                 if screenshot_data:
                     try:
                         import base64
                         # 解码Base64数据为字节
                         error_info['screenshot'] = base64.b64decode(screenshot_data)
-                        log(f"解析到截图数据: {len(error_info['screenshot'])}字节", "blue")
                     except Exception as e:
                         log(f"截图数据解码失败: {e}", "red")
                         error_info['screenshot'] = None
@@ -1210,8 +1204,8 @@ class Server:
                 i += 1
                 while i < len(lines):
                     xml_line = lines[i]
-                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:'] or \
-                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
+                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT_DATA:'] or \
+                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT_DATA:')):
                         i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
@@ -1224,8 +1218,8 @@ class Server:
                 i += 1
                 while i < len(lines):
                     xml_line = lines[i]
-                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:'] or \
-                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
+                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT_DATA:'] or \
+                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT_DATA:')):
                         i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
