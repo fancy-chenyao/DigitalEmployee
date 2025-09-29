@@ -495,6 +495,21 @@ class Server:
                         del element.attrib[k]
             encoded_xml = ET.tostring(tree, encoding='unicode')
             
+            # 确保XML也进入缓冲，与截图配对
+            try:
+                mobilegpt = session.mobilegpt
+                if mobilegpt is not None:
+                    current_count = getattr(mobilegpt, '_screen_count', 0)
+                    assigned_index = max(current_count - 1, 0)
+                    buf = getattr(mobilegpt, '_local_buffer', None)
+                    if buf is None:
+                        buf = {'xmls': [], 'shots': []}
+                        setattr(mobilegpt, '_local_buffer', buf)
+                    buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
+                    log(f"[buffer] xml queued (optimized) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+            except Exception as e:
+                log(f"XML缓冲失败: {e}", "red")
+            
             # 使用优化版本的MobileGPT
             mobilegpt = session.mobilegpt
             use_optimization = os.getenv("MOBILEGPT_OPTIMIZATION", "true").lower() == "true"
@@ -752,7 +767,7 @@ class Server:
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
-        log(f"收到错误消息: {message}", "red")
+        # log(f"收到错误消息: {message}", "red")
         screenshot_data = message.get('screenshot', None)
 
         # 获取必要的变量
@@ -994,8 +1009,9 @@ class Server:
             mobileGPT.derive_agent.init_subtask(next_subtask, mobileGPT.subtask_history)
             mobileGPT.current_subtask = next_subtask
 
-            # 处理基础子任务（finish, speak, scroll_screen）
-            if next_subtask['name'] in ['finish', 'speak', 'scroll_screen']:
+            # 处理基础子任务（finish, speak）
+            # scroll_screen 已注释掉
+            if next_subtask['name'] in ['finish', 'speak']:  # 移除 'scroll_screen'
                 primitive_action = mobileGPT._MobileGPT__handle_primitive_subtask(next_subtask)
                 if primitive_action:
                     try:

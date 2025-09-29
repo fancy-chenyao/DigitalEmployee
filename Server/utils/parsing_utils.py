@@ -173,7 +173,6 @@ def get_ui_key_attrib(ui_index: int, screen: str, include_desc=True) -> dict:
     """
 
     node = tree.find(f".//*[@index='{ui_index}']")
-
     its_attributes = {'tag': node.tag, 'id': node.attrib.get('id', 'NONE'),
                       'class': node.attrib.get('class', 'NONE')}
     if include_desc:

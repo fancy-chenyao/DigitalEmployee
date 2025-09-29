@@ -168,7 +168,7 @@ class MobileGPT:
             self.derive_agent.init_subtask(next_subtask, self.subtask_history)
             self.current_subtask = next_subtask  # 更新当前子任务
 
-            if next_subtask['name'] in ['finish', 'speak', 'scroll_screen']:
+            if next_subtask['name'] in ['finish', 'speak']:  # 移除 'scroll_screen'
                 return self.__handle_primitive_subtask(next_subtask)
 
         subtask_parameters = self.current_subtask['parameters']
@@ -398,20 +398,20 @@ class MobileGPT:
                 _ = parse_completion_rate(next_subtask['parameters']['completion_rate'])
             return self.get_next_action()
 
-        elif next_subtask['name'] == 'scroll_screen':
-            direction = next_subtask['parameters']['direction']
-            index = next_subtask['parameters']['scroll_ui_index']
-
-            scroll_action = {"name": "scroll", "parameters": {"index": index, "direction": direction}}
-            self.socket.send(json.dumps(scroll_action).encode())
-            self.socket.send("\r\n".encode())
-
-            if self.task_status == Status.LEARN:
-                target_info = next_subtask['parameters']['target_info']
-                history = f"Scrolled screen {direction} to find '{target_info}'"
-                self.subtask_history.append(history)
-            self.current_subtask = None
-            self.subtask_status = Status.WAIT
+        # elif next_subtask['name'] == 'scroll_screen':
+        #     direction = next_subtask['parameters']['direction']
+        #     index = next_subtask['parameters']['scroll_ui_index']
+        #
+        #     scroll_action = {"name": "scroll", "parameters": {"index": index, "direction": direction}}
+        #     self.socket.send(json.dumps(scroll_action).encode())
+        #     self.socket.send("\r\n".encode())
+        #
+        #     if self.task_status == Status.LEARN:
+        #         target_info = next_subtask['parameters']['target_info']
+        #         history = f"Scrolled screen {direction} to find '{target_info}'"
+        #         self.subtask_history.append(history)
+        #     self.current_subtask = None
+        #     self.subtask_status = Status.WAIT
 
     def __finish_task(self) -> None:
         """

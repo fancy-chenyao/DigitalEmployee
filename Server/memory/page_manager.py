@@ -22,7 +22,6 @@ class PageManager:
         self.task_name = task_name
         self.page_index = page_index
 
-
         subtask_header = ['name', 'description', 'parameters', 'example']
         action_header = ['subtask_name', 'step', 'action', 'example']
         available_subtask_header = ['name', 'description', 'parameters']
@@ -32,14 +31,38 @@ class PageManager:
         self.available_subtask_db_path = f"page_{page_index}_available_subtasks"
         self.action_db_path = f"page_{page_index}_actions"
 
-        self.subtask_db = init_database(self.subtask_db_path, subtask_header)
-        self.available_subtask_db = init_database(self.available_subtask_db_path, available_subtask_header)
-        self.action_db = init_database(self.action_db_path, action_header)
+        # 根据ENABLE_DB配置选择数据源
+        from env_config import Config
+        
+        if Config.ENABLE_DB:
+            # 使用MongoDB
+            self.subtask_db = init_database(self.subtask_db_path, subtask_header)
+            self.available_subtask_db = init_database(self.available_subtask_db_path, available_subtask_header)
+            self.action_db = init_database(self.action_db_path, action_header)
+        else:
+            # 使用本地CSV文件
+            self.subtask_db = read_dataframe_csv(self.subtask_db_path, subtask_header, task_name=task_name, page_index=page_index)
+            self.available_subtask_db = read_dataframe_csv(self.available_subtask_db_path, available_subtask_header, task_name=task_name, page_index=page_index)
+            self.action_db = read_dataframe_csv(self.action_db_path, action_header, task_name=task_name, page_index=page_index)
+
+        # 确保动作数据正确加载
+        if self.action_db.empty:
+            log(f"⚠️ 页面{page_index}动作数据库为空，尝试重新加载", "yellow")
+            if not Config.ENABLE_DB:
+                # 再次尝试从CSV加载
+                try:
+                    self.action_db = read_dataframe_csv(self.action_db_path, action_header, task_name=task_name, page_index=page_index)
+                except Exception as e:
+                    log(f"⚠️ 无法从CSV加载动作数据: {e}", "yellow")
+                    self.action_db = pd.DataFrame(columns=action_header)
 
         self.action_data = self.action_db.to_dict(orient='records')
 
+        # 添加traversed标记
         for action in self.action_data:
             action['traversed'] = False
+            
+        log(f"📊 页面{page_index}动作数据加载: 动作数量={len(self.action_data)}, 数据源={'MongoDB' if Config.ENABLE_DB else 'CSV'}", "cyan")
 
     def get_available_subtasks(self):
         return self.available_subtask_db.to_dict(orient='records')
