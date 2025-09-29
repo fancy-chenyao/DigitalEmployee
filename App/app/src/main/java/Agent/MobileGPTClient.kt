@@ -251,7 +251,7 @@ class MobileGPTClient(private val serverAddress: String, private val serverPort:
         if (message.screenshot != null) {
             val screenshotBytes = message.getScreenshotBytes()
             if (screenshotBytes != null) {
-                val base64Screenshot = android.util.Base64.encodeToString(screenshotBytes, android.util.Base64.DEFAULT)
+                val base64Screenshot = android.util.Base64.encodeToString(screenshotBytes, android.util.Base64.NO_WRAP)
                 errorData.append("SCREENSHOT_DATA:$base64Screenshot\n")
             }
         }

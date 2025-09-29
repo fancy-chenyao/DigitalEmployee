@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional
+import base64
 
 
 @dataclass
@@ -9,6 +10,17 @@ class AgentMemory:
     errMessage: str
     curXML: str
     preXML: str
+    action: str
+    current_subtask: Optional[str] = None
+    available_subtasks: Optional[list[str]] = None
+
+
+@dataclass
+class AgentMemoryVL:
+    instruction: str
+    errTYPE: str
+    errMessage: str
+    curScreenshot: bytes
     action: str
     current_subtask: Optional[str] = None
     available_subtasks: Optional[list[str]] = None

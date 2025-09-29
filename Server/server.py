@@ -21,8 +21,9 @@ from utils.mongo_utils import check_connection, get_connection_info, close_conne
 from env_config import Config
 from session_manager import SessionManager, ClientSession
 from async_processor import async_processor, message_queue
-from Reflector_Agent.base import AgentMemory
+from Reflector_Agent.base import AgentMemory,AgentMemoryVL
 from Reflector_Agent.reflector import Reflector
+from Reflector_Agent.reflector_vl import ReflectorVL
 from utils.mongo_utils import reconnect
 import traceback
 from screenParser import parseXML
@@ -34,26 +35,26 @@ class Server:
         # 设置增强日志
         setup_logging("INFO", True)
         log_system_status()
-        
+
         # 使用配置类获取参数
         config = Config.get_server_config()
         self.host = host or config['host']
         self.port = port or config['port']
         self.buffer_size = buffer_size or config['buffer_size']
-        
+
         self.memory_directory = Config.MEMORY_DIRECTORY
         self.enable_db = Config.ENABLE_DB
         self.db_queue: "queue.Queue[dict]" = queue.Queue(maxsize=1000)
         self._db_worker_thread = threading.Thread(target=self._db_worker, name="db-writer", daemon=True)
-        
+
         # 打印配置信息
         Config.print_config()
-        
+
         # 检查MongoDB连接
         if self.enable_db:
             if not check_connection():
                 log("MongoDB连接检查失败，尝试重新连接...", "yellow")
-                
+
                 if not reconnect():
                     log("MongoDB连接失败，将使用文件系统存储", "red")
                     self.enable_db = False
@@ -66,21 +67,22 @@ class Server:
             os.makedirs(self.memory_directory)
         # 启动DB后台写入线程
         self._db_worker_thread.start()
-        
+
         # 启动连接监控线程
         self._monitor_thread = threading.Thread(target=self._connection_monitor, name="connection-monitor", daemon=True)
         self._monitor_thread.start()
-        
+
         # 初始化会话管理器
         self.session_manager = SessionManager()
-        
+
         # 异步处理器已在初始化时自动启动
         log("异步处理器已就绪", "green")
-        
+
         # 启动消息队列
         def dummy_message_processor(message: dict):
             """空的消息处理器，用于消息队列"""
             pass
+
         message_queue.start(dummy_message_processor)
 
     def open(self):
@@ -91,7 +93,7 @@ class Server:
             real_ip = s.getsockname()[0]
         finally:
             s.close()
-    
+
         server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((self.host, self.port))
@@ -102,14 +104,14 @@ class Server:
 
         while True:
             client_socket, client_address = server.accept()
-            
+
             # 创建客户端会话
             session = self.session_manager.create_session(client_socket, client_address)
-            
+
             # 启动客户端处理线程
             client_thread = threading.Thread(
-                target=self.handle_client_with_session, 
-                args=(session,), 
+                target=self.handle_client_with_session,
+                args=(session,),
                 name=f"Client-{session.session_id}"
             )
             client_thread.start()
@@ -117,15 +119,15 @@ class Server:
     def handle_client_with_session(self, session: ClientSession):
         """使用会话管理处理客户端连接"""
         log(f"处理客户端会话: {session.session_id} from {session.client_address}", "green")
-        
+
         try:
             # 为会话创建MobileGPT实例
             mobileGPT = MobileGPT(session.client_socket)
             session.mobilegpt = mobileGPT
-            
+
             # 处理客户端消息
             self._process_client_messages(session)
-            
+
         except Exception as e:
             log(f"处理客户端会话时出错: {e}", "red")
         finally:
@@ -136,28 +138,28 @@ class Server:
     def _process_client_messages(self, session: ClientSession):
         """处理客户端消息"""
         client_socket = session.client_socket
-        
+
         # 创建一次性的文件对象，避免重复创建
         try:
             client_file = client_socket.makefile('rb')
-            
+
             while True:
                 try:
                     # 接收消息
                     message = self._receive_message_with_file(client_file)
                     if not message:
                         break
-                    
+
                     # 更新会话活动时间
                     session.update_activity()
-                    
+
                     # 异步处理消息
                     self._handle_message_async(session, message)
-                    
+
                 except Exception as e:
                     log(f"处理消息时出错: {e}", "red")
                     break
-                    
+
         finally:
             try:
                 client_file.close()
@@ -172,10 +174,10 @@ class Server:
             if not message_type_byte:
                 log("客户端断开连接", "yellow")
                 return None
-            
+
             message_type = message_type_byte.decode()
             log(f"检测到消息类型: {message_type}", "blue")
-            
+
             # 根据消息类型处理不同的格式
             if message_type in ['I', 'X', 'S', 'A', 'E', 'G']:
                 # 旧格式：直接读取内容
@@ -185,12 +187,11 @@ class Server:
                 # 新格式：JSON格式
                 log(f"使用新格式解析消息: {message_type}", "blue")
                 return self._receive_json_message(client_file, message_type)
-            
+
         except Exception as e:
             log(f"接收消息失败: {e}", "red")
             return None
 
-    
     def _receive_legacy_message(self, client_file, message_type: str) -> Optional[dict]:
         """接收旧格式消息"""
         try:
@@ -264,11 +265,11 @@ class Server:
                 if len(error_data) != message_length:
                     return None
                 error_content = error_data.decode('utf-8')
-                
+
                 # 解析错误消息以提取截图数据
                 error_info = self._parse_error_message(error_content)
                 screenshot_data = error_info.get('screenshot', None)
-                
+
                 return {
                     'messageType': 'error',
                     'error': error_content,
@@ -282,11 +283,11 @@ class Server:
             else:
                 log(f"未知的旧格式消息类型: {message_type}", "yellow")
                 return None
-                
+
         except Exception as e:
             log(f"解析旧格式消息失败: {e}", "red")
             return None
-    
+
     def _receive_json_message(self, client_file, message_type: str) -> Optional[dict]:
         """接收新格式JSON消息"""
         try:
@@ -294,24 +295,24 @@ class Server:
             length_line = client_file.readline()
             if not length_line:
                 return None
-            
+
             # 安全地解析消息长度
             try:
                 message_length = int(length_line.decode().strip())
             except ValueError:
                 log(f"无效的消息长度格式: {length_line.decode().strip()}", "red")
                 return None
-            
+
             # 读取消息内容
             message_data = client_file.read(message_length)
             if len(message_data) != message_length:
                 log(f"消息长度不匹配: 期望{message_length}, 实际{len(message_data)}", "red")
                 return None
-            
+
             # 解析JSON消息
             message = json.loads(message_data.decode('utf-8'))
             return message
-            
+
         except Exception as e:
             log(f"解析JSON消息失败: {e}", "red")
             return None
@@ -320,7 +321,7 @@ class Server:
         """异步处理消息"""
         message_type = message.get('messageType', '')
         log(f"收到消息: 类型={message_type}, 会话={session.session_id}", "blue")
-        
+
         if message_type == 'instruction' or message_type == 'I':  # 指令消息
             log("处理指令消息", "green")
             self._handle_instruction_message(session, message)
@@ -347,7 +348,7 @@ class Server:
         instruction = message.get('instruction', '')
         log(f"收到指令: {instruction}", "cyan")
         session.instruction = instruction
-        
+
         # 异步处理指令
         self._process_instruction_async(session, instruction)
 
@@ -355,14 +356,14 @@ class Server:
         """异步处理指令，保持功能稳定性"""
         try:
             log("开始异步处理指令业务逻辑", "green")
-            
+
             # 准备异步任务数据
             task_data = {
                 'instruction': instruction,
                 'session_id': session.session_id,
                 'client_socket': session.client_socket
             }
-            
+
             # 定义回调函数
             def instruction_callback(result):
                 try:
@@ -374,7 +375,7 @@ class Server:
                         log(f"指令异步处理失败: {result.get('error', 'unknown error')}", "red")
                 except Exception as e:
                     log(f"指令回调处理失败: {e}", "red")
-            
+
             # 提交异步任务
             task_id = async_processor.submit_task_with_callback(
                 session_id=session.session_id,
@@ -383,14 +384,14 @@ class Server:
                 callback=instruction_callback,
                 priority=10  # 高优先级
             )
-            
+
             if task_id:
                 log(f"指令异步任务已提交: {task_id}", "blue")
             else:
                 log("指令异步任务提交失败，回退到同步处理", "yellow")
                 # 回退到同步处理，确保功能稳定性
                 self._process_instruction_directly(session, instruction)
-                
+
         except Exception as e:
             log(f"异步指令处理失败: {e}，回退到同步处理", "red")
             # 回退到同步处理，确保功能稳定性
@@ -400,28 +401,28 @@ class Server:
         """直接处理指令，执行完整的业务逻辑"""
         try:
             log("开始处理指令业务逻辑", "green")
-            
+
             # 创建TaskAgent解析指令
             task_agent = TaskAgent()
             task, is_new_task = task_agent.get_task(instruction)
-            
+
             log(f"TaskAgent解析结果: 任务={task.get('name', 'unknown')}, 新任务={is_new_task}", "green")
-            
+
             # 创建MobileGPT实例处理业务逻辑
             mobileGPT = MobileGPT(session.client_socket)
             session.mobilegpt = mobileGPT
-            
+
             # 初始化MobileGPT
             mobileGPT.init(instruction, task, is_new_task)
-            
+
             log("MobileGPT初始化完成", "green")
-            
+
             # 这里应该继续处理后续逻辑，比如等待XML和截图数据
             # 然后调用mobileGPT的相应方法
-            
+
         except Exception as e:
             log(f"指令处理失败: {e}", "red")
-            
+
             traceback.print_exc()
 
     def _handle_xml_message(self, session: ClientSession, message: dict):
@@ -429,7 +430,7 @@ class Server:
         xml_content = message.get('xml', '')
         xml_length = len(xml_content) if xml_content else 0
         log(f"收到XML数据: 长度={xml_length}字符", "cyan")
-        
+
         # 使用优化版本处理XML
         self._process_xml_optimized(session, xml_content)
 
@@ -442,16 +443,16 @@ class Server:
                 # 等待指令处理完成，最多等待10秒
                 self._wait_for_mobilegpt(session, xml_content, max_wait=10)
                 return
-            
+
             log("开始异步处理XML", "green")
-            
+
             # 准备异步任务数据
             task_data = {
                 'xml': xml_content,
                 'session_id': session.session_id,
                 'mobilegpt': session.mobilegpt
             }
-            
+
             # 定义回调函数
             def xml_callback(result):
                 try:
@@ -465,7 +466,7 @@ class Server:
                         log(f"XML异步处理失败: {result.get('error', 'unknown error')}", "red")
                 except Exception as e:
                     log(f"XML回调处理失败: {e}", "red")
-            
+
             # 提交异步任务
             task_id = async_processor.submit_task_with_callback(
                 session_id=session.session_id,
@@ -474,19 +475,19 @@ class Server:
                 callback=xml_callback,
                 priority=5  # 中等优先级
             )
-            
+
             if task_id:
                 log(f"XML异步任务已提交: {task_id}", "blue")
             else:
                 log("XML异步任务提交失败，回退到同步处理", "yellow")
                 # 回退到同步处理，确保功能稳定性
                 self._process_xml_directly(session, xml_content)
-                
+
         except Exception as e:
             log(f"异步XML处理失败: {e}，回退到同步处理", "red")
             # 回退到同步处理，确保功能稳定性
             self._process_xml_directly(session, xml_content)
-    
+
     def _process_xml_optimized(self, session: ClientSession, xml_content: str):
         """使用优化版本处理XML"""
         try:
@@ -494,9 +495,9 @@ class Server:
                 log("MobileGPT实例未准备就绪，等待指令处理完成", "yellow")
                 self._wait_for_mobilegpt(session, xml_content, max_wait=10)
                 return
-            
+
             log("开始优化版本XML处理", "green")
-            
+
             # 解析XML数据
             screen_parser = xmlEncoder()
             parsed_xml = parseXML.parse(xml_content)
@@ -507,11 +508,11 @@ class Server:
                     if k in element.attrib:
                         del element.attrib[k]
             encoded_xml = ET.tostring(tree, encoding='unicode')
-            
+
             # 使用优化版本的MobileGPT
             mobilegpt = session.mobilegpt
             use_optimization = os.getenv("MOBILEGPT_OPTIMIZATION", "true").lower() == "true"
-            
+
             if use_optimization and hasattr(mobilegpt, 'get_next_action_optimized'):
                 # 使用异步优化版本
                 import asyncio
@@ -526,13 +527,13 @@ class Server:
             else:
                 # 回退到同步版本
                 action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
-            
+
             if action:
                 log(f"MobileGPT返回动作: {action}", "green")
                 self._send_action_to_client(session, action)
             else:
                 log("MobileGPT未返回动作", "yellow")
-                
+
         except Exception as e:
             log(f"优化版本XML处理失败: {e}", "red")
             traceback.print_exc()
@@ -541,10 +542,10 @@ class Server:
 
     def _wait_for_mobilegpt(self, session: ClientSession, xml_content: str, max_wait: int = 15):
         """等待MobileGPT实例准备就绪"""
-        
+
         start_time = time.time()
         log(f"开始等待MobileGPT实例准备就绪，最多等待{max_wait}秒", "blue")
-        
+
         while time.time() - start_time < max_wait:
             # 检查MobileGPT实例是否存在
             if not hasattr(session, 'mobilegpt'):
@@ -560,24 +561,24 @@ class Server:
                 # 直接处理XML，避免递归调用
                 self._process_xml_content_directly(session, xml_content)
                 return
-            
+
             time.sleep(0.5)  # 等待500ms
-        
+
         log(f"等待MobileGPT实例超时({max_wait}秒)，回退到同步处理", "yellow")
         self._process_xml_directly(session, xml_content)
 
     def _is_mobilegpt_ready(self, session: ClientSession) -> bool:
         """快速检查MobileGPT是否准备就绪"""
-        return (hasattr(session, 'mobilegpt') and 
+        return (hasattr(session, 'mobilegpt') and
                 session.mobilegpt is not None and
-                hasattr(session.mobilegpt, 'memory') and 
+                hasattr(session.mobilegpt, 'memory') and
                 session.mobilegpt.memory is not None)
 
     def _process_xml_content_directly(self, session: ClientSession, xml_content: str):
         """直接处理XML内容，避免递归调用"""
         try:
             log("开始处理XML内容", "green")
-            
+
             # 解析XML数据
             screen_parser = xmlEncoder()
             parsed_xml = parseXML.parse(xml_content)
@@ -599,22 +600,24 @@ class Server:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
                     buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
-                    log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                    log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}",
+                        "blue")
             except Exception:
                 pass
-            
-            log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
-            
+
+            log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符",
+                "green")
+
             # 调用MobileGPT的get_next_action方法
             action = session.mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
-            
+
             if action:
                 log(f"MobileGPT返回动作: {action}", "green")
                 # 发送动作给客户端
                 self._send_action_to_client(session, action)
             else:
                 log("MobileGPT未返回动作", "yellow")
-                
+
         except Exception as e:
             log(f"处理XML内容失败: {e}", "red")
             traceback.print_exc()
@@ -625,9 +628,9 @@ class Server:
             if not self._is_mobilegpt_ready(session):
                 log("MobileGPT未准备就绪，跳过XML处理", "yellow")
                 return
-                
+
             log("使用MobileGPT直接处理XML", "green")
-            
+
             # 解析XML数据
             screen_parser = xmlEncoder()
             parsed_xml = parseXML.parse(xml_content)
@@ -638,20 +641,20 @@ class Server:
                     if k in element.attrib:
                         del element.attrib[k]
             encoded_xml = ET.tostring(tree, encoding='unicode')
-            
-            
-            log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
-            
+
+            log(f"XML解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符",
+                "green")
+
             # 调用MobileGPT的get_next_action方法
             action = session.mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml)
-            
+
             if action:
                 log(f"MobileGPT返回动作: {action}", "green")
                 # 发送动作给客户端
                 self._send_action_to_client(session, action)
             else:
                 log("MobileGPT未返回动作", "yellow")
-                
+
         except Exception as e:
             log(f"MobileGPT处理XML失败: {e}", "red")
             traceback.print_exc()
@@ -660,17 +663,17 @@ class Server:
         """发送动作给客户端"""
         try:
             log(f"发送动作给客户端: {action}", "green")
-            
+
             # 将动作转换为JSON字符串
             action_json = json.dumps(action, ensure_ascii=False)
-            
+
             # 发送给客户端
             client_socket = session.client_socket
             client_socket.send(action_json.encode('utf-8'))
             client_socket.send(b'\r\n')  # 添加结束符
-            
+
             log("动作发送成功", "green")
-            
+
         except Exception as e:
             log(f"发送动作失败: {e}", "red")
 
@@ -679,7 +682,7 @@ class Server:
         screenshot_data = message.get('screenshot', b'')
         screenshot_size = len(screenshot_data) if screenshot_data else 0
         log(f"收到截图数据: 大小={screenshot_size}字节", "cyan")
-        
+
         # 异步处理截图
         self._process_screenshot_async(session, screenshot_data)
 
@@ -687,14 +690,14 @@ class Server:
         """异步处理截图，保持功能稳定性"""
         try:
             log("开始异步处理截图", "green")
-            
+
             # 准备异步任务数据
             task_data = {
                 'screenshot': screenshot_data,
                 'session_id': session.session_id,
                 'mobilegpt': getattr(session, 'mobilegpt', None)
             }
-            
+
             # 定义回调函数
             def screenshot_callback(result):
                 try:
@@ -704,7 +707,7 @@ class Server:
                         log(f"截图异步处理失败: {result.get('error', 'unknown error')}", "red")
                 except Exception as e:
                     log(f"截图回调处理失败: {e}", "red")
-            
+
             # 提交异步任务
             task_id = async_processor.submit_task_with_callback(
                 session_id=session.session_id,
@@ -713,14 +716,14 @@ class Server:
                 callback=screenshot_callback,
                 priority=3  # 低优先级
             )
-            
+
             if task_id:
                 log(f"截图异步任务已提交: {task_id}", "blue")
             else:
                 log("截图异步任务提交失败，回退到同步处理", "yellow")
                 # 回退到同步处理，确保功能稳定性
                 self._process_screenshot_directly(session, screenshot_data)
-                
+
         except Exception as e:
             log(f"异步截图处理失败: {e}，回退到同步处理", "red")
             # 回退到同步处理，确保功能稳定性
@@ -771,7 +774,7 @@ class Server:
         """处理错误消息"""
         error_content = message.get('error', '')
         screenshot_data = message.get('screenshot', None)
-        
+
         if screenshot_data:
             log(f"收到错误消息，包含截图数据: {len(screenshot_data)}字节", "red")
         else:
@@ -779,12 +782,12 @@ class Server:
 
         # 获取必要的变量
         client_socket = session.client_socket
-        mobileGPT = getattr(session, 'mobilegpt', None)        
+        mobileGPT = getattr(session, 'mobilegpt', None)
         # 检查必要的依赖
         if not client_socket:
             log("客户端socket不存在，无法处理错误消息", "red")
             return
-            
+
         if not mobileGPT:
             log("MobileGPT实例不存在，无法处理错误消息", "red")
             return
@@ -800,18 +803,19 @@ class Server:
             # 获取前一个界面的子任务列表和执行的子任务
             try:
                 log("尝试搜索匹配的历史页面", "blue")
-                page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre)
+                page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml_pre, hierarchy_xml_pre,
+                                                                        encoded_xml_pre)
                 log(f"search_node返回结果: page_index={page_index}", "blue")
-                
+
                 # if page_index == -1:
                 #     log("未找到匹配页面，尝试探索新界面", "blue")
                 #     page_index = mobileGPT.explore_agent.explore(parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre)
                 #     log(f"explore返回结果: page_index={page_index}", "blue")
-                
+
                 log(f"获取可用子任务，page_index={page_index}", "blue")
                 available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
                 log(f"获取到的可用子任务: {available_subtasks}", "blue")
-                
+
                 current_subtask = mobileGPT.current_subtask
                 log(f"当前子任务: {current_subtask}", "blue")
             except Exception as e:
@@ -821,27 +825,47 @@ class Server:
                 available_subtasks = []
                 current_subtask = None
 
-            # 初始化AgentMemory
-            self.agent_memory = AgentMemory(
+            """
+            下面代码为使用出错前后的界面元素进行反思的代码
+            """
+            # # 初始化AgentMemory
+            # self.agent_memory = AgentMemory(
+            #     instruction=error_info.get('instruction', 'None'),
+            #     errTYPE=error_info.get('error_type', 'UNKNOWN'),
+            #     errMessage=error_info.get('error_message', 'No message'),
+            #     curXML=encoded_xml,
+            #     preXML=encoded_xml_pre,
+            #     action=error_info.get('action', 'None'),
+            #     current_subtask=current_subtask,
+            #     available_subtasks=available_subtasks
+            # )
+            #
+            # log(self.agent_memory.instruction, "blue")
+            # log(self.agent_memory.action, "blue")
+            # log(f"当前子任务: {self.agent_memory.current_subtask}", "blue")
+            # log(f"可用子任务: {self.agent_memory.available_subtasks}", "blue")
+            #
+            # # 调用Reflector进行反思分析
+            # reflector = Reflector(self.agent_memory)
+            # reflection = reflector.reflect_on_episodic_memory(self.agent_memory)
+
+            """
+            下面代码为使用出错时的界面截图进行反思的代码
+            """
+            # 初始化AgentMemoryVL
+            self.agent_memory_vl = AgentMemoryVL(
                 instruction=error_info.get('instruction', 'None'),
                 errTYPE=error_info.get('error_type', 'UNKNOWN'),
                 errMessage=error_info.get('error_message', 'No message'),
-                curXML=encoded_xml,
-                preXML=encoded_xml_pre,
+                curScreenshot=screenshot_data,
                 action=error_info.get('action', 'None'),
                 current_subtask=current_subtask,
                 available_subtasks=available_subtasks
             )
+            # 调用ReflectorVL进行反思分析
+            reflector_vl = ReflectorVL(self.agent_memory_vl)
+            reflection = reflector_vl.reflect_on_episodic_memory(self.agent_memory_vl)
 
-            log(self.agent_memory.instruction, "blue")
-            log(self.agent_memory.action, "blue")
-            log(f"当前子任务: {self.agent_memory.current_subtask}", "blue")
-            log(f"可用子任务: {self.agent_memory.available_subtasks}", "blue")
-
-            # 调用Reflector进行反思分析
-            reflector = Reflector(self.agent_memory)
-            reflection = reflector.reflect_on_episodic_memory(self.agent_memory)
-            
             # 根据反思结果决定下一步操作
             if reflection.need_back:
                 # 需要回退，直接发送回退指令
@@ -862,8 +886,9 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True, action_failed=False, suggestions=suggestion)
-                    
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True,
+                                                       action_failed=False, suggestions=suggestion)
+
                 else:
                     # 获取MobileGPT实例并调用方法
                     mobilegpt = getattr(session, 'mobilegpt', None)
@@ -871,15 +896,16 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
-                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False, action_failed=True, suggestions=suggestion)
-            
+                    action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False,
+                                                       action_failed=True, suggestions=suggestion)
+
                 if action:
                     log(f"MobileGPT返回动作: {action}", "green")
                     # 发送动作给客户端
                     self._send_action_to_client(session, action)
                 else:
                     log("MobileGPT未返回动作", "yellow")
-                    
+
         except Exception as e:
             log(f"处理错误消息时发生异常: {e}", "red")
             # 发送默认的finish动作作为兜底
@@ -910,16 +936,16 @@ class Server:
         """处理区域选择错误"""
         client_socket = session.client_socket
         mobileGPT = session.mobilegpt
-        
+
         log(f"处理区域选择错误，建议: {advice}", "blue")
-        
+
         # 获取当前XML数据（从错误信息中提取）
         current_xml = error_info.get('cur_xml', '')
         if not current_xml:
             log("没有当前XML数据，无法处理区域错误", "red")
             self._send_finish_action(client_socket, "缺少XML数据")
             return
-            
+
         try:
             parsed_xml = parseXML.parse(current_xml)
             hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
@@ -940,32 +966,33 @@ class Server:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
                     buf['xmls'].append({'index': assigned_index, 'xml': current_xml})
-                    log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}", "blue")
+                    log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}",
+                        "blue")
             except Exception:
                 pass
-            
+
             # 搜索当前页面节点并获取可用子任务
             page_index, new_subtasks = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
             available_subtasks = mobileGPT.memory.get_available_subtasks(page_index)
             if len(new_subtasks) > 0:
                 available_subtasks += new_subtasks
-            
+
             # 调用SelectAgent.select：结合历史和当前界面选择子任务，传入反思建议
             response, new_action = mobileGPT.select_agent.select(
-                available_subtasks, 
+                available_subtasks,
                 mobileGPT.subtask_history,
                 mobileGPT.qa_history,
-                encoded_xml, 
+                encoded_xml,
                 [advice] if advice else []
             )
-            
+
             # 若生成了新动作，添加到内存（供后续复用）
             if new_action:
                 mobileGPT.memory.add_new_action(new_action, page_index)
-            
+
             # 提取选择的子任务
             next_subtask = response['action']
-            
+
             # 处理speak动作
             if next_subtask['name'] != 'read_screen':
                 msg = response['speak']
@@ -977,22 +1004,22 @@ class Server:
                 except Exception as e:
                     log(f"发送speak动作失败: {e}", "red")
                     return
-            
+
             # 更新MobileGPT的子任务状态和历史
             if mobileGPT.current_subtask_data:
                 mobileGPT.task_path.append(mobileGPT.current_subtask_data)
-            
+
             mobileGPT.current_subtask_data = {
                 "page_index": page_index,
-                "subtask_name": next_subtask['name'], 
-                "subtask": next_subtask, 
+                "subtask_name": next_subtask['name'],
+                "subtask": next_subtask,
                 "actions": []
             }
-            
+
             # 初始化推导智能体
             mobileGPT.derive_agent.init_subtask(next_subtask, mobileGPT.subtask_history)
             mobileGPT.current_subtask = next_subtask
-            
+
             # 处理基础子任务（finish, speak, scroll_screen）
             if next_subtask['name'] in ['finish', 'speak', 'scroll_screen']:
                 primitive_action = mobileGPT._MobileGPT__handle_primitive_subtask(next_subtask)
@@ -1006,17 +1033,18 @@ class Server:
             else:
                 # 对于复杂子任务，调用derive_agent生成具体动作
                 try:
-                    next_action, example = mobileGPT.derive_agent.derive(encoded_xml, suggestions=[advice] if advice else [])
-                    
+                    next_action, example = mobileGPT.derive_agent.derive(encoded_xml,
+                                                                         suggestions=[advice] if advice else [])
+
                     # 记录动作数据
                     current_action_data = {
-                        "page_index": page_index, 
-                        "action": next_action, 
+                        "page_index": page_index,
+                        "action": next_action,
                         "screen": encoded_xml,
                         "example": example
                     }
                     mobileGPT.current_subtask_data['actions'].append(current_action_data)
-                    
+
                     # 发送动作到客户端
                     if next_action:
                         message = json.dumps(next_action)
@@ -1028,11 +1056,11 @@ class Server:
                             log(f"发送纠正动作失败: {e}", "red")
                     else:
                         self._send_finish_action(client_socket, "derive_agent返回空动作")
-                        
+
                 except Exception as derive_error:
                     log(f"derive_agent处理失败: {derive_error}", "red")
                     self._send_finish_action(client_socket, "derive_agent处理失败")
-                    
+
         except Exception as e:
             log(f"处理区域错误时发生异常: {e}", "red")
             self._send_finish_action(client_socket, "处理区域错误时发生异常")
@@ -1041,21 +1069,21 @@ class Server:
         """处理指令错误"""
         client_socket = session.client_socket
         mobileGPT = session.mobilegpt
-        
+
         log("处理指令错误 - 使用derive_agent重新生成动作", "yellow")
-        
+
         # 获取当前XML数据
         current_xml = error_info.get('cur_xml', '')
         if not current_xml:
             log("缺少XML数据，无法重新生成动作", "red")
             self._send_finish_action(client_socket, "缺少XML数据")
             return
-            
+
         if not mobileGPT.current_subtask:
             log("缺少当前子任务，无法重新生成动作", "red")
             self._send_finish_action(client_socket, "缺少当前子任务")
             return
-            
+
         try:
             parsed_xml = parseXML.parse(current_xml)
             hierarchy_xml = parseXML.hierarchy_parse(parsed_xml)
@@ -1066,11 +1094,11 @@ class Server:
                         del element.attrib[k]
             encoded_xml = ET.tostring(tree, encoding='unicode')
             page_index, _ = mobileGPT.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
-            
+
             # 使用derive_agent重新生成动作，传入反思建议
             suggestions = [advice] if advice else []
             next_action, example = mobileGPT.derive_agent.derive(encoded_xml, suggestions=suggestions)
-            
+
             # 记录重新生成的动作数据
             current_action_data = {
                 "page_index": page_index,
@@ -1079,10 +1107,10 @@ class Server:
                 "example": example,
                 "regenerated": True
             }
-            
+
             if mobileGPT.current_subtask_data:
                 mobileGPT.current_subtask_data['actions'].append(current_action_data)
-            
+
             # 发送重新生成的动作到客户端
             if next_action:
                 message = json.dumps(next_action)
@@ -1096,25 +1124,20 @@ class Server:
             else:
                 log("derive_agent返回空动作，发送finish动作", "yellow")
                 self._send_finish_action(client_socket, "derive_agent返回空动作")
-                
+
         except Exception as derive_error:
             log(f"指令错误恢复过程中发生异常: {derive_error}", "red")
             self._send_finish_action(client_socket, "指令错误恢复失败")
 
-
-        
-        
         # 可以在这里添加错误处理逻辑
         # 目前只是记录日志
 
     def _handle_get_actions_message(self, session: ClientSession, message: dict):
         """处理获取操作消息"""
         log("收到获取操作请求", "blue")
-        
+
         # 可以在这里添加获取操作列表的逻辑
         # 目前只是记录日志
-
-
 
     def __recv_xml(self, file_obj, screen_count, log_directory, xmls_dir):
         # Receive the file size (length-prefixed line)
@@ -1144,14 +1167,13 @@ class Server:
         with open(raw_xml_path, 'w', encoding='utf-8') as wf:
             wf.write(raw_xml)
         return raw_xml
-    
-    
+
     def _save_xml_to_mongo(self, xml_data, screen_count, xml_type):
-        """将XML数据保存到MongoDB（无 app 维度）"""      
+        """将XML数据保存到MongoDB（无 app 维度）"""
         try:
             db = get_db()
             collection = db['temp_xmls']
-            
+
             xml_doc = {
                 'task_name': getattr(self, 'current_task', 'unknown'),
                 'screen_count': screen_count,
@@ -1159,7 +1181,7 @@ class Server:
                 'xml_content': xml_data,
                 'created_at': datetime.now()
             }
-            
+
             collection.replace_one(
                 {
                     'task_name': xml_doc['task_name'],
@@ -1171,12 +1193,12 @@ class Server:
             )
         except Exception as e:
             log(f"Failed to save XML to MongoDB: {e}", "red")
-    
+
     def _parse_error_message(self, error_string):
         """解析错误消息，提取各种上下文信息"""
         error_info = {}
         lines = error_string.split('\n')
-        
+
         i = 0
         while i < len(lines):
             line = lines[i].strip()
@@ -1210,8 +1232,10 @@ class Server:
                 i += 1
                 while i < len(lines):
                     xml_line = lines[i]
-                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:'] or \
-                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
+                    if xml_line.strip() in ['CUR_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:',
+                                            'REMARK:', 'SCREENSHOT:'] or \
+                            xml_line.strip().startswith(
+                                ('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
                         i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
@@ -1224,8 +1248,10 @@ class Server:
                 i += 1
                 while i < len(lines):
                     xml_line = lines[i]
-                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:'] or \
-                       xml_line.strip().startswith(('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
+                    if xml_line.strip() in ['PRE_XML:', 'ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:',
+                                            'REMARK:', 'SCREENSHOT:'] or \
+                            xml_line.strip().startswith(
+                                ('ERROR_TYPE:', 'ERROR_MESSAGE:', 'ACTION:', 'INSTRUCTION:', 'REMARK:', 'SCREENSHOT:')):
                         i -= 1  # 回退一行，让外层循环处理
                         break
                     xml_lines.append(xml_line)
@@ -1233,7 +1259,7 @@ class Server:
                 if xml_lines:
                     error_info['cur_xml'] = '\n'.join(xml_lines).strip()
             i += 1
-        
+
         return error_info
 
     def _enqueue_db_doc(self, doc: dict):
@@ -1336,10 +1362,10 @@ class Server:
                             current_conn = conn_info['connections']['current']
                             max_conn = conn_info['max_pool_size']
                             # MongoDB连接状态日志已删除，减少日志噪音
-                
+
                 # 每30秒检查一次
                 time.sleep(30)
-                
+
             except Exception as e:
                 log(f"连接监控异常: {e}", "red")
                 time.sleep(60)  # 出错时等待更长时间
@@ -1365,10 +1391,10 @@ class Server:
             'async_processor': async_processor.get_stats(),
             'message_queue': message_queue.get_status()
         }
-        
+
         if self.enable_db:
             status['database'] = get_connection_info()
-        
+
         return status
 
     def shutdown(self):
@@ -1376,26 +1402,26 @@ class Server:
         优雅关闭服务器
         """
         log("正在关闭服务器...", "yellow")
-        
+
         # 停止异步处理器
         async_processor.stop()
         log("异步处理器已停止", "green")
-        
+
         # 停止消息队列
         message_queue.stop()
         log("消息队列已停止", "green")
-        
+
         # 关闭会话管理器
         self.session_manager.shutdown()
         log("会话管理器已关闭", "green")
-        
+
         # 关闭MongoDB连接
         if self.enable_db:
             close_connection()
             log("MongoDB连接已关闭", "green")
-        
+
         # 等待队列处理完成
         while not self.db_queue.empty():
             time.sleep(0.1)
-        
+
         log("服务器已关闭", "green")
