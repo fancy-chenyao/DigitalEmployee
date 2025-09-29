@@ -32,6 +32,8 @@ class DeriveAgent:
             # 按照匹配删除（判空避免异常）
             if len(self.action_history) > 0:
                 self.action_history.pop()
+            if len(self.response_history) > 0:
+                self.response_history.pop()
             derive_prompt = derive_agent_prompt.get_prompts(self.instruction, self.subtask,
                                                             self.subtask_history + self.action_history, screen,
                                                             examples, suggestions)
