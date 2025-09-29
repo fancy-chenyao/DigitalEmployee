@@ -56,7 +56,7 @@ class ReflectorVL:
         # 格式化智能体人格信息
         persona_content = DEFAULT_PERSONA_FORMAT_TEMPLATE
 
-        base64_image = agent_memory.curScreenshot
+        base64_image = base64.b64encode(agent_memory.curScreenshot).decode('utf-8')
 
         error_type = agent_memory.errTYPE
         error_message = agent_memory.errMessage
