@@ -113,22 +113,7 @@ class Memory:
             page_manager.save_subtask(subtask_raw, example={})
         except Exception:
             pass
-        # 3) 可选：首次成功即写入 actions.csv 基础动作（避免重复）
-        try:
-            action_db = getattr(page_manager, 'action_db', None)
-            need_write = True
-            if action_db is not None and not action_db.empty:
-                same = action_db[(action_db.get('subtask_name') == new_action.get('name')) & (action_db.get('step') == 0)]
-                if same is not None and not same.empty:
-                    need_write = False
-            if need_write:
-                base_action = {
-                    "name": new_action.get("name", "unknown"),
-                    "parameters": new_action.get("parameters", {})
-                }
-                page_manager.save_action(new_action.get('name', 'unknown'), 0, base_action, example={})
-        except Exception:
-            pass
+        # 3) 移除基础动作模板保存，只保留具体执行动作
 
     def search_node_by_hierarchy(self, parsed_xml, hierarchy_xml, encoded_xml) -> (int, list):
         # 1. First search for at most 5 candidate nodes based only on the hierarchy of the screen
@@ -240,9 +225,9 @@ class Memory:
                               "parameters": {}
                               }
             return finish_subtask
-        elif next_subtask_name == "scroll_screen":
-            scroll_subtask = {"name": "scroll_screen", "parameters": {"scroll_ui_index": 1, "direction": 'down'}}
-            return scroll_subtask
+        # elif next_subtask_name == "scroll_screen":
+        #     scroll_subtask = {"name": "scroll_screen", "parameters": {"scroll_ui_index": 1, "direction": 'down'}}
+        #     return scroll_subtask
         # 若找到子任务，填充参数（调用param_fill_agent，结合问答历史）,调用subtasks.csv
         if next_subtask_name:
             next_subtask_data = self.page_manager.get_next_subtask_data(next_subtask_name)

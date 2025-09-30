@@ -4,21 +4,18 @@ from utils.utils import generate_numbered_list
 # 系统提示生成，指导大语言模型判断用户指令是否匹配已知的 API（任务定义），若不匹配则生成新的 API，并严格约束输出格式。
 def get_sys_prompt():
     sys_msg = (
-        "Given the user instruction, check if it matches any of the known APIs. "
-        "If there's no match, suggest a new API.\n\n"
+        "根据用户指令，检查是否与任何已知的API匹配。"
+        "如果没有匹配项，建议一个新的API。\n\n"
 
-        "**Guidelines on how to find a matching API:**\n"
-        "1. An API is a match if it covers all the steps "
-        "required for the given user instruction.\n"
-        "2. An API does NOT match if the user instruction requires additional steps "
-        "beyond what the API description provides.\n\n"
+        "**如何找到匹配API的指导原则：**\n"
+        "1. 如果API涵盖了给定用户指令所需的所有步骤，则API匹配。\n"
+        "2. 如果用户指令需要超出API描述提供的额外步骤，则API不匹配。\n\n"
 
-        "**Guidelines on how to generate a new API:**\n"
-        "Break down the user instruction into a api name and parameters "
-        "combination. The combination should CLEARLY REPRESENT all phrases in the instruction.\n\n"
+        "**如何生成新API的指导原则：**\n"
+        "将用户指令分解为API名称和参数的组合。该组合应该清楚地表示指令中的所有短语。\n\n"
 
-        "Respond using the JSON format below. Ensure the response can be parsed by Python json.loads:\n"
-        '{"reasoning":<reasoning>, "found_match": <True or False>,  "api": {"name":<matched_api_name. Suggest new api if there is no match>, "description": <description of what the api intends to do>, "parameters":{"<parameter_name>":<parameter description>,...} }}'
+        "使用下面的JSON格式回应。确保回应可以被Python json.loads解析：\n"
+        '{"reasoning":<推理过程>, "found_match": <True或False>,  "api": {"name":<匹配的API名称。如果没有匹配则建议新API>, "description": <API意图的描述>, "parameters":{"<参数名称>":<参数描述>,...} }}'
     )
     return sys_msg
 
@@ -27,47 +24,47 @@ def get_sys_prompt():
 def get_usr_prompt(instruction: str, known_tasks: list):
     numbered_known_tasks = generate_numbered_list(known_tasks)
     usr_msg = (
-        "[Example #1]:\n"
-        "User instruction: 'find me an asian restaurant in Las Vegas'\n\n"
+        "[示例 #1]:\n"
+        "用户指令：'在拉斯维加斯找一家亚洲餐厅'\n\n"
 
-        "List of known APIs:\n"
-        '1. {"name":"findRestaurantsByLocation", "description": "find restaurants in a specific location.", "parameters":{"location":"The location to search in"}}\n'
-        "...(truncated for brevity)...\n\n"
+        "已知API列表：\n"
+        '1. {"name":"findRestaurantsByLocation", "description": "在特定位置查找餐厅", "parameters":{"location":"要搜索的位置"}}\n'
+        "...(为简洁起见省略)...\n\n"
 
-        "Response:\n"
-        '{"reasoning":...(truncated for brevity)..., "found_match": "False",  "api": {"name":"findRestaurantsByCuisineAndLocation", "description": "find restaurants in a specific location based on the type of cuisine", "parameters":{"cuisine_type":"The type of cuisine to search for", "location":"The location to search in"}}}\n'
-        "[END Example #1]\n\n"
+        "回应：\n"
+        '{"reasoning":...(为简洁起见省略)..., "found_match": "False",  "api": {"name":"findRestaurantsByCuisineAndLocation", "description": "根据菜系类型在特定位置查找餐厅", "parameters":{"cuisine_type":"要搜索的菜系类型", "location":"要搜索的位置"}}}\n'
+        "[示例 #1 结束]\n\n"
 
-        # "[Example #2]:\n"
-        # "User instruction: 'find me an Mexican restaurant in Washington'\n\n"
+        # "[示例 #2]:\n"
+        # "用户指令：'在华盛顿找一家墨西哥餐厅'\n\n"
         #     
-        # "List of known APIs:\n"
-        # '1. {"name":"findRestaurantsByLocation", "description": "find restaurants in a specific location.", "parameters":{"location":"The location to search in"}, "app": "unknown"}\n'
-        # '2. {"name":"findRestaurantsByCuisineAndLocation", "description": "find restaurants in a specific location based on the type of cuisine", "parameters":{"cuisine_type":"The type of cuisine to search for", "location":"The location to search in"}, "app": "unknown"}\n'
-        # "...(truncated for brevity)...\n\n"
+        # "已知API列表：\n"
+        # '1. {"name":"findRestaurantsByLocation", "description": "在特定位置查找餐厅", "parameters":{"location":"要搜索的位置"}, "app": "unknown"}\n'
+        # '2. {"name":"findRestaurantsByCuisineAndLocation", "description": "根据菜系类型在特定位置查找餐厅", "parameters":{"cuisine_type":"要搜索的菜系类型", "location":"要搜索的位置"}, "app": "unknown"}\n'
+        # "...(为简洁起见省略)...\n\n"
         # 
-        # "Response:\n"
-        # '{"reasoning":...(truncated for brevity)..., "found_match": "True",  "name":"findRestaurantsByCuisineAndLocation", "description": "find restaurants in a specific location based on the type of cuisine", "parameters":{"cuisine_type":"The type of cuisine to search for", "location":"The location to search in"}, "app": "unknown"}\n'
-        # "[END Example #2]\n\n"
+        # "回应：\n"
+        # '{"reasoning":...(为简洁起见省略)..., "found_match": "True",  "name":"findRestaurantsByCuisineAndLocation", "description": "根据菜系类型在特定位置查找餐厅", "parameters":{"cuisine_type":"要搜索的菜系类型", "location":"要搜索的位置"}, "app": "unknown"}\n'
+        # "[示例 #2 结束]\n\n"
 
-        "[Example #2]:\n"
-        "User instruction: 'send message to Bob saying hello'\n\n"
+        "[示例 #2]:\n"
+        "用户指令：'给Bob发消息说你好'\n\n"
 
-        "List of known APIs:\n"
-        '1. {"name":"sendMessage", "description": "send message to a recipient", "parameters":{"recipient":"recipient of the message"}}\n'
-        "...(truncated for brevity)...\n\n"
+        "已知API列表：\n"
+        '1. {"name":"sendMessage", "description": "向收件人发送消息", "parameters":{"recipient":"消息的收件人"}}\n'
+        "...(为简洁起见省略)...\n\n"
 
-        "Response:\n"
-        '{"reasoning":...(truncated for brevity)..., "found_match": "True",  "api": {"name":"sendMessage", "description": "send message to a recipient", "parameters":{"recipient":"recipient of the message", "message":"content of the message"}}}\n'
-        "[END Example #2]\n\n"
+        "回应：\n"
+        '{"reasoning":...(为简洁起见省略)..., "found_match": "True",  "api": {"name":"sendMessage", "description": "向收件人发送消息", "parameters":{"recipient":"消息的收件人", "message":"消息内容"}}}\n'
+        "[示例 #2 结束]\n\n"
 
-        "[Your Turn]\n"
-        f"User instruction: '{instruction}'\n\n"
+        "[轮到你了]\n"
+        f"用户指令：'{instruction}'\n\n"
 
-        "List of known APIs:\n"
+        "已知API列表：\n"
         f"{numbered_known_tasks}\n\n"
 
-        "Response:\n"
+        "回应：\n"
     )
     return usr_msg
 

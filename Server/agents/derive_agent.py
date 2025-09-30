@@ -45,6 +45,15 @@ class DeriveAgent:
         # 生成大模型的提示词（整合所有推导依据）
         # derive_agent_prompt.get_prompts：传入用户指令、当前子任务、历史记录、界面信息、示例，生成结构化提示词
         # 提示词内容示例："用户要'发消息'，当前子任务是'点击发送'，历史已执行'输入文本'，界面有'发送按钮'，请生成点击坐标"
+        
+        # 打印完整的提示词信息
+        # log(f"🔍 derive_agent完整提示词:", "cyan")
+        # for i, msg in enumerate(derive_prompt):
+        #     content = msg.get("content", "")
+        #     if len(content) > 200:
+        #         log(f"      完整内容:\n{content}", "cyan")
+        #     log("", "cyan")  # 空行分隔
+        
         response = query(derive_prompt, model=os.getenv("DERIVE_AGENT_GPT_VERSION"))
         log(f"derive_agent收到AI响应: {response}", "blue")
         log(f"derive_agent收到AI响应类型: {type(response)}", "blue")

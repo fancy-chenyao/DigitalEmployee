@@ -110,9 +110,10 @@ class SelectAgent:
 
         # Check if the selected action is in the available subtasks
         # 步骤1：判断是否为"系统预设的基础子任务"（无需在available_subtasks中，直接判定有效）
-        # 基础子任务：scroll_screen（滑动）、finish（结束）、speak（语音播报），系统已内置执行逻辑
+        # 基础子任务：finish（结束）、speak（语音播报），系统已内置执行逻辑
+        # scroll_screen（滑动）已注释掉
         subtask_match = False
-        if action['name'] in ['scroll_screen', 'finish', 'speak']:
+        if action['name'] in ['finish', 'speak']:  # 移除 'scroll_screen'
             subtask_match = True
             return True
 
