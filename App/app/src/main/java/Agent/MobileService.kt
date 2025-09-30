@@ -317,7 +317,7 @@ class MobileService : Service() {
                 }
                 screenUpdateWaitRunnable?.let {
                     mainThreadHandler.removeCallbacks(it)
-                    mainThreadHandler.postDelayed(it, 5000)
+                    mainThreadHandler.postDelayed(it, 1500)
                 }
             }
         }else {

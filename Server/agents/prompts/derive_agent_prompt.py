@@ -32,13 +32,13 @@ default_actions = [
         "parameters": {"index": {"type": "integer", "description": "index of the UI element that takes text input"},
                        "input_text": {"type": "string", "description": "text or value to input"}}
     },
-    {
-        "name": "scroll",
-        "description": "Scroll up or down to view more UIs",
-        "parameters": {"index": {"type": "integer", "description": "index of the UI element to scroll."},
-                       "direction": {"type": "string", "description": "direction to scroll, default='down'",
-                                     "enum": ["up", "down"]}}
-    },
+    # {
+    #     "name": "scroll",
+    #     "description": "Scroll up or down to view more UIs",
+    #     "parameters": {"index": {"type": "integer", "description": "index of the UI element to scroll."},
+    #                    "direction": {"type": "string", "description": "direction to scroll, default='down'",
+    #                                  "enum": ["up", "down"]}}
+    # },
     {
         "name": "repeat-click",
         "description": "Repeat click action multiple times",

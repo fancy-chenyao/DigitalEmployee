@@ -752,7 +752,7 @@ class Server:
     def _handle_error_message(self, session: ClientSession, message: dict):
         """处理错误消息"""
         error_content = message.get('error', '')
-        log(f"收到错误消息: {message}", "red")
+        # log(f"收到错误消息: {message}", "red")
         screenshot_data = message.get('screenshot', None)
 
         # 获取必要的变量
@@ -773,6 +773,8 @@ class Server:
             screen_parser = xmlEncoder()
             parsed_xml, hierarchy_xml, encoded_xml = screen_parser.encode(error_info['cur_xml'], 0)
             parsed_xml_pre, hierarchy_xml_pre, encoded_xml_pre = screen_parser.encode(error_info['pre_xml'], 0)
+
+            log(f"错误信息: {error_info.get('error_message', 'No message')}", "red")
 
             # 获取前一个界面的子任务列表和执行的子任务
             try:

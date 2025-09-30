@@ -1,13 +1,13 @@
 from utils.utils import generate_numbered_list
 
 default_subtasks = [
-    {"name": "scroll_screen",
-     "description": "Useful when you need to scroll up or down to view more UIs and actions. Make sure to stop when you find that you want.",
-     "parameters": {
-         "scroll_ui_index": "index of the UI to scroll",
-         "direction": "direction to scroll",
-         "target_info": "what are you looking for?"}
-     },
+    # {"name": "scroll_screen",
+    #  "description": "Useful when you need to scroll up or down to view more UIs and actions. Make sure to stop when you find that you want.",
+    #  "parameters": {
+    #      "scroll_ui_index": "index of the UI to scroll",
+    #      "direction": "direction to scroll",
+    #      "target_info": "what are you looking for?"}
+    #  },
     {"name": "speak",
      "description": "Tell information in the screen to the user. Use this only when the user has explicitly stated you to tell him something.",
      "parameters": {
