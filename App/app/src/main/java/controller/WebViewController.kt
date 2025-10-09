@@ -12,15 +12,15 @@ import org.json.JSONObject
 object WebViewController {
     private const val JS_INTERFACE_NAME = "AndroidNativeBridge"
     
-    fun initWebView(webView: WebView) {
-        webView.settings.javaScriptEnabled = true
-        webView.addJavascriptInterface(WebAppInterface(webView.context), JS_INTERFACE_NAME)
-
-        // 注入JS脚本
-        val injectScript = """
+    // 复用的注入脚本构造函数，避免不同方法之间脚本重复
+    private fun getInjectScript(): String {
+        return (
+            """
             window.__NativeBridge = {
                 getElementTree: function() {
                     try {
+                        // 为本次树构建维护一个唯一的索引计数器
+                        let indexCounter = 0;
                         function parseNode(node) {
                             if (!node || !node.getBoundingClientRect) {
                                 return null;
@@ -57,7 +57,7 @@ object WebViewController {
                                 scrollable: node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth,
                                 longClickable: false,
                                 selected: node.selected || false,
-                                index: 0,
+                                index: (indexCounter++),
                                 naf: false,
                                 additionalProps: {
                                     className: node.className || '',
@@ -84,7 +84,7 @@ object WebViewController {
                                 scrollable: false,
                                 longClickable: false,
                                 selected: false,
-                                index: 0,
+                                index: (indexCounter++),
                                 naf: false,
                                 additionalProps: {},
                                 children: []
@@ -106,7 +106,7 @@ object WebViewController {
                             scrollable: false,
                             longClickable: false,
                             selected: false,
-                            index: 0,
+                            index: (indexCounter++),
                             naf: false,
                             additionalProps: {},
                             children: []
@@ -126,7 +126,7 @@ object WebViewController {
                             scrollable: false,
                             longClickable: false,
                             selected: false,
-                            index: 0,
+                            index: (indexCounter++),
                             naf: false,
                             additionalProps: {},
                             children: []
@@ -161,7 +161,16 @@ object WebViewController {
                     }
                 }
             };
-        """.trimIndent()
+            """
+        ).trimIndent()
+    }
+    
+    fun initWebView(webView: WebView) {
+        webView.settings.javaScriptEnabled = true
+        webView.addJavascriptInterface(WebAppInterface(webView.context), JS_INTERFACE_NAME)
+
+        // 注入JS脚本
+        val injectScript = getInjectScript()
         
         // 始终在页面完成加载后再次注入，避免被页面刷新覆盖
         webView.webViewClient = object : android.webkit.WebViewClient() {
@@ -175,31 +184,30 @@ object WebViewController {
     }
     
     fun getElementTree(webView: WebView, callback: (GenericElement) -> Unit) {
-        webView.evaluateJavascript("window.__NativeBridge && window.__NativeBridge.getElementTree && window.__NativeBridge.getElementTree();") { value ->
+        // 确保JS可用
+        try { webView.settings.javaScriptEnabled = true } catch (_: Exception) {}
+
+        fun evaluateAndParse(value: String?) {
             try {
                 val raw = value ?: "null"
                 Log.d("WebViewController", "getElementTree raw: $raw")
-                // 处理返回为 null/undefined/空 字符串的情况
                 if (raw == "null" || raw == "undefined" || raw.isBlank()) {
                     callback(createErrorElement("WebView未就绪或JS未注入"))
-                    return@evaluateJavascript
+                    return
                 }
 
-                // 移除最外层引号
                 var jsonString = raw
                 if (jsonString.length >= 2 && jsonString.first() == '"' && jsonString.last() == '"') {
                     jsonString = jsonString.substring(1, jsonString.length - 1)
                 }
-                // 处理常见转义
                 jsonString = jsonString
                     .replace("\\\"", "\"")
                     .replace("\\\\", "\\")
                     .replace("\\n", "\n")
 
-                // 基本校验
                 if (!jsonString.trim().startsWith("{")) {
                     callback(createErrorElement("返回数据非法"))
-                    return@evaluateJavascript
+                    return
                 }
 
                 val element = parseJsonToGenericElement(jsonString)
@@ -209,6 +217,29 @@ object WebViewController {
                 callback(createErrorElement("解析错误: ${e.message}"))
             }
         }
+
+        fun fetch(attempt: Int) {
+            // 检查桥接是否已就绪
+            webView.evaluateJavascript("(function(){return !!(window.__NativeBridge && window.__NativeBridge.getElementTree)})()") { ready ->
+                if (ready == "true") {
+                    webView.evaluateJavascript("window.__NativeBridge.getElementTree();") { value ->
+                        evaluateAndParse(value)
+                    }
+                } else {
+                    // 尝试注入脚本后重试一次
+                    val injectScript = getInjectScript()
+                    webView.evaluateJavascript("(function(){ $injectScript })();") { _ ->
+                        if (attempt < 1) {
+                            fetch(attempt + 1)
+                        } else {
+                            evaluateAndParse(null)
+                        }
+                    }
+                }
+            }
+        }
+
+        fetch(0)
     }
     
     fun clickElement(webView: WebView, elementId: String, callback: (Boolean) -> Unit) {

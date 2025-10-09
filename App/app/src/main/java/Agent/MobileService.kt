@@ -26,6 +26,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.TextView
+import android.webkit.WebView
 import controller.ElementController
 import controller.GenericElement
 import controller.NativeController
@@ -89,6 +90,9 @@ class MobileService : Service() {
     private var lastPageChangeTime = 0L
     private var pageChangeDebounceRunnable: Runnable? = null
     private val PAGE_CHANGE_DEBOUNCE_DELAY = 500L // 防抖延迟500ms
+    private var monitoredWebView: WebView? = null
+    private var webViewDrawListener: ViewTreeObserver.OnDrawListener? = null
+    private var webViewScrollListener: ViewTreeObserver.OnScrollChangedListener? = null
 
     /**
      * 本地绑定器类
@@ -323,6 +327,12 @@ class MobileService : Service() {
         }else {
             // 不执行屏幕更新
             Log.d(TAG, "xmlPending为false 不执行屏幕更新")
+            // 测试XML的获取
+            saveCurrScreen {
+                Log.d(TAG, "当前屏幕XML: $currentScreenXML")
+            }
+            
+
         }
     }
 
@@ -414,6 +424,44 @@ class MobileService : Service() {
             // 添加监听器
             viewTreeObserver.addOnGlobalLayoutListener(globalLayoutListener)
 
+            // 如果当前页面为 WebView 页面，额外监听 WebView 的绘制与滚动（DOM 更新不会改变原生视图树）
+            try {
+                val webView = findFirstWebView(rootView)
+                if (webView != null) {
+                    val wvObserver = webView.viewTreeObserver
+                    if (wvObserver.isAlive) {
+                        monitoredWebView = webView
+                        // 绘制变化监听（用于捕获 DOM 更新）
+                        webViewDrawListener = ViewTreeObserver.OnDrawListener {
+                            try {
+                                Log.d(TAG, "WebView绘制变化触发 - 可能是DOM更新")
+                                onPageChanged("WebView绘制变化")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "处理WebView绘制变化时发生异常", e)
+                            }
+                        }
+                        wvObserver.addOnDrawListener(webViewDrawListener)
+
+                        // 滚动变化监听（用户在网页内滚动）
+                        webViewScrollListener = ViewTreeObserver.OnScrollChangedListener {
+                            try {
+                                Log.d(TAG, "WebView滚动变化触发")
+                                onPageChanged("WebView滚动变化")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "处理WebView滚动变化时发生异常", e)
+                            }
+                        }
+                        wvObserver.addOnScrollChangedListener(webViewScrollListener)
+
+                        Log.d(TAG, "已为Activity ${activity.javaClass.simpleName} 的WebView设置绘制/滚动监听")
+                    }
+                } else {
+                    Log.d(TAG, "未检测到WebView，保持原有视图树监听")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "设置WebView监听时发生异常", e)
+            }
+
             // 保存当前监听状态
             currentViewTreeObserver = viewTreeObserver
             currentMonitoredActivity = activity
@@ -436,12 +484,30 @@ class MobileService : Service() {
                     Log.d(TAG, "已移除ViewTreeObserver监听")
                 }
             }
+
+            // 移除 WebView 的监听
+            try {
+                val webView = monitoredWebView
+                if (webView != null) {
+                    val wvObserver = webView.viewTreeObserver
+                    if (wvObserver.isAlive) {
+                        webViewDrawListener?.let { wvObserver.removeOnDrawListener(it) }
+                        webViewScrollListener?.let { wvObserver.removeOnScrollChangedListener(it) }
+                        Log.d(TAG, "已移除WebView绘制/滚动监听")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "移除WebView监听时发生异常", e)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "移除ViewTreeObserver监听时发生异常", e)
         } finally {
             currentViewTreeObserver = null
             globalLayoutListener = null
             currentMonitoredActivity = null
+            monitoredWebView = null
+            webViewDrawListener = null
+            webViewScrollListener = null
         }
     }
 
@@ -454,6 +520,21 @@ class MobileService : Service() {
         val currentTime = System.currentTimeMillis()
         Log.d(TAG, "处理页面变化: $reason")
         WaitScreenUpdate()
+    }
+
+    /**
+     * 在视图树中查找第一个WebView
+     */
+    private fun findFirstWebView(view: View): WebView? {
+        if (view is WebView) return view
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                val child = view.getChildAt(i)
+                val result = findFirstWebView(child)
+                if (result != null) return result
+            }
+        }
+        return null
     }
 
     /**
