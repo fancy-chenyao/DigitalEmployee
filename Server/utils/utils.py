@@ -122,7 +122,8 @@ def get_openai_embedding(text: str, model="text-embedding-v1", **kwargs) -> List
         return cached
 
     client = OpenAI(
-        api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
+        # api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
+        api_key="sk-c2cc873160714661aa76b6d5ab7239bf",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
     response = client.embeddings.create(input=[text_norm], model=model, **kwargs)
@@ -212,7 +213,8 @@ def query(messages, model="qwen3-32b", is_list=False):
             return cached
 
     client = OpenAI(
-        api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
+        # api_key="sk-401cd3617a3b4f96a8cd820d76bacfa1",
+        api_key="sk-c2cc873160714661aa76b6d5ab7239bf",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
 
