@@ -328,9 +328,9 @@ class MobileService : Service() {
             // 不执行屏幕更新
             Log.d(TAG, "xmlPending为false 不执行屏幕更新")
             // 测试XML的获取
-            saveCurrScreen {
-                Log.d(TAG, "当前屏幕XML: $currentScreenXML")
-            }
+//            saveCurrScreen {
+//                Log.d(TAG, "当前屏幕XML: $currentScreenXML")
+//            }
             
 
         }
