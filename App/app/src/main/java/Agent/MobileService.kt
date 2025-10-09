@@ -1552,12 +1552,13 @@ class MobileService : Service() {
         
         Log.d(TAG, "使用坐标点击 (dp): ($centerX dp, $centerY dp)")
         
-        // 使用NativeController的坐标点击功能
-        //
-//        ElementController.clickByCoordinateDp(activity,centerX.toFloat(),centerY.toFloat(),callback)
-        NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
+        // 使用ElementController的坐标点击功能
+        ElementController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
             callback(success)
         }
+//        NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
+//            callback(success)
+//        }
     }
 
 
