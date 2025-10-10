@@ -184,7 +184,9 @@ class MobileGPT:
         #             question = raw_subtask['parameters'][key]
         #             ask_action = {"name": "ask", "parameters": {"info_name": key, "question": question}}
         #             return ask_action
-
+        if action_failed:
+            self.current_subtask_data['action'].pop()
+            log(f"删除上一个出错动作")
         # 从内存中获取历史动作（回忆模式）
         next_action = self.memory.get_next_action(self.current_subtask, self.encoded_xml)
         current_action_data = {"page_index": self.current_page_index, "action": next_action, "screen": self.encoded_xml,

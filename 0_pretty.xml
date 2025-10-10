@@ -1,41 +1,111 @@
 <?xml version="1.0" ?>
-<div id="view_17900817" index="34">
-	<div id="view_230082692" index="4">
-		<button id="view_171644632" description="返回" index="0"/>
-		<MaterialTextView text="关闭" id="view_254720561" index="1"/>
-		<MaterialTextView text="拟请假时间" id="view_109470998" index="2"/>
-		<View id="view_252309143" index="3"/>
+<div id="view_80277092" index="98">
+	<div id="view_70144179" index="4">
+		<button id="view_178989591" description="返回" index="0"/>
+		<MaterialTextView text="关闭" id="view_108928516" index="1"/>
+		<MaterialTextView text="拟请假时间" id="view_200290285" index="2"/>
+		<View id="view_36490786" index="3"/>
 	</div>
-	<View id="view_33802349" index="5"/>
-	<div id="view_251036799" index="27">
-		<MaterialTextView text="年休假 (工作日)" id="view_66829474" index="6"/>
-		<button id="view_263994874" index="14">
-			<AppCompatImageView id="view_217374003" description="必填" index="7"/>
-			<MaterialTextView text="开始时间" id="view_135915760" index="8"/>
-			<View id="view_27360873" index="9"/>
-			<MaterialTextView text="2025年10月09日" id="view_75301102" index="10"/>
-			<button id="view_71997477" index="13">
-				<MaterialTextView text="全天" id="view_93723023" index="11"/>
-				<AppCompatImageView id="view_5022748" description="选择" index="12"/>
+	<View id="view_29431408" index="5"/>
+	<div id="view_191183658" index="27">
+		<MaterialTextView text="年休假 (工作日)" id="view_246210025" index="6"/>
+		<button id="view_265904417" index="14">
+			<AppCompatImageView id="view_107850350" description="必填" index="7"/>
+			<MaterialTextView text="开始时间" id="view_95634703" index="8"/>
+			<View id="view_83437980" index="9"/>
+			<MaterialTextView text="2025年10月10日" id="view_57438117" index="10"/>
+			<button id="view_138232712" index="13">
+				<MaterialTextView text="全天" id="view_231604090" index="11"/>
+				<AppCompatImageView id="view_115942187" description="选择" index="12"/>
 			</button>
 		</button>
-		<button id="view_137668317" index="21">
-			<MaterialTextView text="结束时间" id="view_124043179" index="15"/>
-			<View id="view_26076680" index="16"/>
-			<MaterialTextView text="2025年10月30日" id="view_129077665" index="17"/>
-			<button id="view_169826996" index="20">
-				<MaterialTextView text="全天" id="view_75513798" index="18"/>
-				<AppCompatImageView id="view_120433543" description="选择" index="19"/>
+		<button id="view_255785888" index="21">
+			<MaterialTextView text="结束时间" id="view_195860806" index="15"/>
+			<View id="view_22333191" index="16"/>
+			<MaterialTextView text="2025年10月10日" id="view_203886644" index="17"/>
+			<button id="view_132959395" index="20">
+				<MaterialTextView text="全天" id="view_264891997" index="18"/>
+				<AppCompatImageView id="view_143197138" description="选择" index="19"/>
 			</button>
 		</button>
-		<div id="view_18973086" index="26">
-			<MaterialTextView text="年休假对应年份" id="view_87069266" index="22"/>
-			<View id="view_263158051" index="23"/>
-			<MaterialTextView text="2025年年假" id="view_145845792" index="24"/>
-			<AppCompatImageView id="view_265933785" description="选择" index="25"/>
+		<div id="view_101813269" index="26">
+			<MaterialTextView text="年休假对应年份" id="view_205263705" index="22"/>
+			<View id="view_55544606" index="23"/>
+			<MaterialTextView text="2025年年假" id="view_209031167" index="24"/>
+			<AppCompatImageView id="view_237515212" description="选择" index="25"/>
 		</div>
 	</div>
-	<CustomDatePickerView id="view_17498889" index="29"/>
-	<div id="view_111155626" index="31"/>
-	<button text="拟请假22天, 确认" id="view_226027931" index="32"/>
+	<div id="view_44954982" index="92">
+		<div id="view_147150979" index="33">
+			<div id="view_54648637" index="31">
+				<MaterialTextView text="2025" id="view_263345383" index="29"/>
+				<MaterialTextView text="周五, 10月 10" id="view_108443796" index="30"/>
+			</div>
+			<button id="view_188666674" description="关闭" index="32"/>
+		</div>
+		<div id="view_259717599" index="37">
+			<button id="view_89180672" description="上一个月" index="34"/>
+			<MaterialTextView text="十月 2025" id="view_217199161" index="35"/>
+			<button id="view_260239486" description="下一个月" index="36"/>
+		</div>
+		<div id="view_35931607" index="45">
+			<MaterialTextView text="S" id="view_16287276" index="38"/>
+			<MaterialTextView text="M" id="view_79345909" index="39"/>
+			<MaterialTextView text="T" id="view_173643402" index="40"/>
+			<MaterialTextView text="W" id="view_213865723" index="41"/>
+			<MaterialTextView text="T" id="view_243128600" index="42"/>
+			<MaterialTextView text="F" id="view_72019825" index="43"/>
+			<MaterialTextView text="S" id="view_188911958" index="44"/>
+		</div>
+		<GridLayout id="view_100391322" index="88">
+			<p id="view_33779396" index="46"/>
+			<p id="view_114168237" index="47"/>
+			<p id="view_133065954" index="48"/>
+			<button text="1" id="view_243099763" index="49"/>
+			<button text="2" id="view_220902192" index="50"/>
+			<button text="3" id="view_82254761" index="51"/>
+			<button text="4" id="view_243954990" index="52"/>
+			<button text="5" id="view_3938511" index="53"/>
+			<button text="6" id="view_138400348" index="54"/>
+			<button text="7" id="view_74238309" index="55"/>
+			<button text="8" id="view_13415994" index="56"/>
+			<button text="9" id="view_25916139" index="57"/>
+			<button text="10" id="view_36026440" index="58"/>
+			<button text="11" id="view_132486881" index="59"/>
+			<button text="12" id="view_62913542" index="60"/>
+			<button text="13" id="view_170676935" index="61"/>
+			<button text="14" id="view_50467060" index="62"/>
+			<button text="15" id="view_163823645" index="63"/>
+			<button text="16" id="view_5231250" index="64"/>
+			<button text="17" id="view_51467363" index="65"/>
+			<button text="18" id="view_229197920" index="66"/>
+			<button text="19" id="view_258031897" index="67"/>
+			<button text="20" id="view_9733598" index="68"/>
+			<button text="21" id="view_129684415" index="69"/>
+			<button text="22" id="view_197823116" index="70"/>
+			<button text="23" id="view_263968213" index="71"/>
+			<button text="24" id="view_98509290" index="72"/>
+			<button text="25" id="view_22211803" index="73"/>
+			<button text="26" id="view_14402424" index="74"/>
+			<button text="27" id="view_166787665" index="75"/>
+			<button text="28" id="view_59077302" index="76"/>
+			<button text="29" id="view_126450615" index="77"/>
+			<button text="30" id="view_264609572" index="78"/>
+			<button text="31" id="view_125430413" index="79"/>
+			<p id="view_174982210" index="80"/>
+			<p id="view_53484627" index="81"/>
+			<p id="view_256870800" index="82"/>
+			<p id="view_103260809" index="83"/>
+			<p id="view_22815374" index="84"/>
+			<p id="view_244722351" index="85"/>
+			<p id="view_155954876" index="86"/>
+			<p id="view_98491973" index="87"/>
+		</GridLayout>
+		<div id="view_101980609" index="91">
+			<button text="Cancel" id="view_262456011" index="89"/>
+			<button text="OK" id="view_8583848" index="90"/>
+		</div>
+	</div>
+	<div id="view_9163921" index="95"/>
+	<button text="拟请假1天, 确认" id="view_259252214" index="96"/>
 </div>
