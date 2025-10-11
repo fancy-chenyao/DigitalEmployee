@@ -231,83 +231,112 @@ class MobileGPT:
         return next_action
 
     def __flush_buffer_to_page(self, page_index: int) -> None:
-        """将缓冲中的最近一对(shot+xml)写入指定页面的 screen 目录。"""
+        """将缓冲中所有属于指定页面的(shot+xml)对写入对应页面的 screen 目录。"""
         buf = getattr(self, '_local_buffer', None)
         if not buf or (not buf.get('xmls') or not buf.get('shots')):
             return
 
-        # 寻找最近一对共同 index
+        # 寻找所有共同 index，且若带有 page_index 标签则仅落当前页的对儿
         xml_indices = {item.get('index') for item in buf['xmls'] if 'index' in item}
         shot_indices = {item.get('index') for item in buf['shots'] if 'index' in item}
-        common = sorted(list(xml_indices.intersection(shot_indices)))
+        common_all = sorted(list(xml_indices.intersection(shot_indices)))
+        
+        # 过滤到当前页
+        common = []
+        for idx in common_all:
+            xml_tag = next((it for it in buf['xmls'] if it.get('index') == idx), None)
+            shot_tag = next((it for it in buf['shots'] if it.get('index') == idx), None)
+            if xml_tag is None or shot_tag is None:
+                continue
+            page_tag_xml = xml_tag.get('page_index', None)
+            page_tag_shot = shot_tag.get('page_index', None)
+            # 若打了标签且与当前页不一致，则跳过；未打标签则允许
+            if (page_tag_xml is not None and page_tag_xml != page_index) or (page_tag_shot is not None and page_tag_shot != page_index):
+                continue
+            common.append(idx)
+        
         if not common:
             return
-        index = common[-1]
 
-        # 取出对应项
-        xml_item = None
-        for i in reversed(range(len(buf['xmls']))):
-            if buf['xmls'][i].get('index') == index:
-                xml_item = buf['xmls'].pop(i)
-                break
-        shot_item = None
-        for i in reversed(range(len(buf['shots']))):
-            if buf['shots'][i].get('index') == index:
-                shot_item = buf['shots'].pop(i)
-                break
-        if not xml_item or not shot_item:
-            return
+        # 处理所有匹配的索引对
+        flushed_count = 0
+        for index in common:
+            # 取出对应项（选择最早加入缓冲的匹配项，避免后到的同 index XML 覆盖先到的）
+            xml_item = None
+            for i in range(len(buf['xmls'])):
+                if buf['xmls'][i].get('index') == index:
+                    xml_item = buf['xmls'].pop(i)
+                    break
+            shot_item = None
+            for i in range(len(buf['shots'])):
+                if buf['shots'][i].get('index') == index:
+                    shot_item = buf['shots'].pop(i)
+                    break
+            if not xml_item or not shot_item:
+                continue
 
-        # 目标目录
-        task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
-        dest_dir = get_screen_bundle_dir(task_name, page_index)
+            # 确定目标页面：优先使用标签的page_index，否则使用传入的page_index
+            xml_page_tag = xml_item.get('page_index', None)
+            shot_page_tag = shot_item.get('page_index', None)
+            target_page = xml_page_tag if xml_page_tag is not None else (shot_page_tag if shot_page_tag is not None else page_index)
+            
+            # 目标目录
+            task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
+            dest_dir = get_screen_bundle_dir(task_name, target_page)
 
-        # 写 screenshot
-        try:
-            import os
-            shot_bytes = shot_item.get('bytes', b'')
-            with open(os.path.join(dest_dir, 'screenshot.jpg'), 'wb') as f:
-                f.write(shot_bytes)
-            log(f"[flush] wrote screenshot -> {dest_dir}/screenshot.jpg ({len(shot_bytes)} bytes)", "blue")
-        except Exception as e:
-            log(f"[flush] write screenshot failed: {e}", "red")
-
-        # 生成与写入 XML 变体
-        raw_xml = xml_item.get('xml', '')
-        try:
-            from screenParser import parseXML
-            import xml.etree.ElementTree as ET
-            import xml.dom.minidom as minidom
-            parsed = parseXML.parse(raw_xml)
-            hierarchy = parseXML.hierarchy_parse(parsed)
-            tree = ET.fromstring(parsed)
-            for element in tree.iter():
-                for k in ("bounds", "important", "class"):
-                    if k in element.attrib:
-                        del element.attrib[k]
-            encoded = ET.tostring(tree, encoding='unicode')
-            pretty = minidom.parseString(encoded).toprettyxml()
-
-            import os
-            with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
-                f.write(raw_xml)
-            with open(os.path.join(dest_dir, 'parsed.xml'), 'w', encoding='utf-8') as f:
-                f.write(parsed)
-            with open(os.path.join(dest_dir, 'hierarchy.xml'), 'w', encoding='utf-8') as f:
-                f.write(hierarchy)
-            with open(os.path.join(dest_dir, 'html.xml'), 'w', encoding='utf-8') as f:
-                f.write(encoded)
-            with open(os.path.join(dest_dir, 'pretty.xml'), 'w', encoding='utf-8') as f:
-                f.write(pretty)
-            log(f"[flush] wrote xmls -> {dest_dir}/(raw|parsed|hierarchy|html|pretty).xml", "blue")
-        except Exception as e:
+            # 写 screenshot
             try:
                 import os
+                shot_bytes = shot_item.get('bytes', b'')
+                screenshot_path = os.path.join(dest_dir, 'screenshot.jpg')
+                with open(screenshot_path, 'wb') as f:
+                    f.write(shot_bytes)
+                log(f"[flush] wrote screenshot -> {screenshot_path} ({len(shot_bytes)} bytes)", "blue")
+            except Exception as e:
+                log(f"[flush] write screenshot failed for index {index}: {e}", "red")
+                continue
+
+            # 生成与写入 XML 变体
+            raw_xml = xml_item.get('xml', '')
+            try:
+                from screenParser import parseXML
+                import xml.etree.ElementTree as ET
+                import xml.dom.minidom as minidom
+                parsed = parseXML.parse(raw_xml)
+                hierarchy = parseXML.hierarchy_parse(parsed)
+                tree = ET.fromstring(parsed)
+                for element in tree.iter():
+                    for k in ("bounds", "important", "class"):
+                        if k in element.attrib:
+                            del element.attrib[k]
+                encoded = ET.tostring(tree, encoding='unicode')
+                pretty = minidom.parseString(encoded).toprettyxml()
+
+                import os
+                os.makedirs(dest_dir, exist_ok=True)
                 with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
                     f.write(raw_xml)
-            except Exception:
-                pass
-            log(f"[flush] write xml failed: {e}", "red")
+                with open(os.path.join(dest_dir, 'parsed.xml'), 'w', encoding='utf-8') as f:
+                    f.write(parsed)
+                with open(os.path.join(dest_dir, 'hierarchy.xml'), 'w', encoding='utf-8') as f:
+                    f.write(hierarchy)
+                with open(os.path.join(dest_dir, 'html.xml'), 'w', encoding='utf-8') as f:
+                    f.write(encoded)
+                with open(os.path.join(dest_dir, 'pretty.xml'), 'w', encoding='utf-8') as f:
+                    f.write(pretty)
+                log(f"[flush] wrote xmls -> {dest_dir}/(raw|parsed|hierarchy|html|pretty).xml", "blue")
+                flushed_count += 1
+            except Exception as e:
+                try:
+                    import os
+                    with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
+                        f.write(raw_xml)
+                except Exception:
+                    pass
+                log(f"[flush] write xml failed for index {index}: {e}", "red")
+        
+        if flushed_count > 0:
+            log(f"[flush] flushed {flushed_count} pairs to page {page_index}", "green")
 
     def set_qa_answer(self, info_name: str, question: str, answer: str):
         qa = {"info": info_name, "question": question, "answer": answer}

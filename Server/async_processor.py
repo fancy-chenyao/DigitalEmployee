@@ -417,8 +417,8 @@ class AsyncProcessor:
                     db = get_db()
                     temp_xmls = db['temp_xmls']
                     task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'untitled') or 'untitled'
+                    # 统一由截图路径自增 _screen_count，这里不自增，避免与截图路径产生双自增错位
                     screen_count = getattr(mobilegpt, '_screen_count', 0)
-                    setattr(mobilegpt, '_screen_count', screen_count + 1)
                     docs = [
                         {"task_name": task_name, "xml_type": "raw", "screen_count": screen_count, "xml_content": xml_content},
                         {"task_name": task_name, "xml_type": "parsed", "screen_count": screen_count, "xml_content": parsed_xml},
@@ -445,16 +445,30 @@ class AsyncProcessor:
                         if k in element.attrib:
                             del element.attrib[k]
                 encoded_xml = ET.tostring(tree, encoding='unicode')
-                # 缓存原始XML，供事后落盘
-                # 与截图对齐：使用最近一次截图的 index（_screen_count - 1）
+                # 缓存原始XML，供事后落盘；与最近一次截图对齐（_screen_count - 1）
                 current_count = getattr(mobilegpt, '_screen_count', 0)
                 screen_count = max(current_count - 1, 0)
                 buf = getattr(mobilegpt, '_local_buffer', None)
                 if buf is None:
                     buf = {'xmls': [], 'shots': []}
                     setattr(mobilegpt, '_local_buffer', buf)
-                buf['xmls'].append({'index': screen_count, 'xml': xml_content})
-                log(f"[buffer] xml queued idx={screen_count}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                # 避免重复 index 覆盖，优先保留最早的一份
+                if not any(it.get('index') == screen_count for it in buf['xmls']):
+                    buf['xmls'].append({'index': screen_count, 'xml': xml_content})
+                    log(f"[buffer] xml queued idx={screen_count}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                    # 若已存在同 index 截图，则给成对项打上 page_index 标签
+                    if any(it.get('index') == screen_count for it in buf['shots']):
+                        page_idx = getattr(mobilegpt, 'current_page_index', -1)
+                        for it in buf['xmls']:
+                            if it.get('index') == screen_count:
+                                it['page_index'] = page_idx
+                                break
+                        for it in buf['shots']:
+                            if it.get('index') == screen_count:
+                                it['page_index'] = page_idx
+                                break
+                else:
+                    log(f"[buffer] xml skipped (duplicate index) idx={screen_count}", "yellow")
             
             log(f"XML异步解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
@@ -502,7 +516,7 @@ class AsyncProcessor:
             task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'untitled') or 'untitled'
             db_available = bool(Config.ENABLE_DB) and check_connection()
 
-            # 统一递增 screen_count（与XML一致）
+            # 统一由截图路径递增 _screen_count：这里自增，作为唯一自增入口
             screen_count = getattr(mobilegpt, '_screen_count', 0)
             setattr(mobilegpt, '_screen_count', screen_count + 1)
 

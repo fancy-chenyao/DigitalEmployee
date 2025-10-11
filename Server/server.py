@@ -499,14 +499,31 @@ class Server:
             try:
                 mobilegpt = session.mobilegpt
                 if mobilegpt is not None:
+                    # XML 始终与“最近一次截图”的索引对齐：使用 current_count - 1
                     current_count = getattr(mobilegpt, '_screen_count', 0)
                     assigned_index = max(current_count - 1, 0)
                     buf = getattr(mobilegpt, '_local_buffer', None)
                     if buf is None:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
-                    buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
-                    log(f"[buffer] xml queued (optimized) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                    # 避免同一 index 存在多个 XML，优先保留最早的一份
+                    if not any(it.get('index') == assigned_index for it in buf['xmls']):
+                        buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
+                        log(f"[buffer] xml queued (optimized) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                        # 若已存在同 index 截图，则给成对项打上 page_index 标签
+                        if any(it.get('index') == assigned_index for it in buf['shots']):
+                            page_idx = getattr(mobilegpt, 'current_page_index', -1)
+                            # 标记 xml 与 shot 项
+                            for it in buf['xmls']:
+                                if it.get('index') == assigned_index:
+                                    it['page_index'] = page_idx
+                                    break
+                            for it in buf['shots']:
+                                if it.get('index') == assigned_index:
+                                    it['page_index'] = page_idx
+                                    break
+                    else:
+                        log(f"[buffer] xml skipped (duplicate index) idx={assigned_index}", "yellow")
             except Exception as e:
                 log(f"XML缓冲失败: {e}", "red")
             
@@ -594,14 +611,28 @@ class Server:
             try:
                 mobilegpt = session.mobilegpt
                 if mobilegpt is not None:
+                    # XML 始终与“最近一次截图”的索引对齐：使用 current_count - 1
                     current_count = getattr(mobilegpt, '_screen_count', 0)
                     assigned_index = max(current_count - 1, 0)
                     buf = getattr(mobilegpt, '_local_buffer', None)
                     if buf is None:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
-                    buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
-                    log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                    if not any(it.get('index') == assigned_index for it in buf['xmls']):
+                        buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
+                        log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                        if any(it.get('index') == assigned_index for it in buf['shots']):
+                            page_idx = getattr(mobilegpt, 'current_page_index', -1)
+                            for it in buf['xmls']:
+                                if it.get('index') == assigned_index:
+                                    it['page_index'] = page_idx
+                                    break
+                            for it in buf['shots']:
+                                if it.get('index') == assigned_index:
+                                    it['page_index'] = page_idx
+                                    break
+                    else:
+                        log(f"[buffer] xml skipped (duplicate index) idx={assigned_index}", "yellow")
             except Exception:
                 pass
             
@@ -772,8 +803,7 @@ class Server:
 
         # 获取必要的变量
         client_socket = session.client_socket
-        mobileGPT = getattr(session, 'mobilegpt', None)        
-        # 检查必要的依赖
+        mobileGPT = getattr(session, 'mobilegpt', None)
         if not client_socket:
             log("客户端socket不存在，无法处理错误消息", "red")
             return
@@ -948,15 +978,29 @@ class Server:
             try:
                 mobilegpt = session.mobilegpt
                 if mobilegpt is not None:
+                    # XML 始终与“最近一次截图”的索引对齐：使用 current_count - 1
                     current_count = getattr(mobilegpt, '_screen_count', 0)
                     assigned_index = max(current_count - 1, 0)
                     buf = getattr(mobilegpt, '_local_buffer', None)
                     if buf is None:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
-                    buf['xmls'].append({'index': assigned_index, 'xml': current_xml})
-                    log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}",
-                        "blue")
+                    if not any(it.get('index') == assigned_index for it in buf['xmls']):
+                        buf['xmls'].append({'index': assigned_index, 'xml': current_xml})
+                        log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}",
+                            "blue")
+                        if any(it.get('index') == assigned_index for it in buf['shots']):
+                            page_idx = getattr(mobilegpt, 'current_page_index', -1)
+                            for it in buf['xmls']:
+                                if it.get('index') == assigned_index:
+                                    it['page_index'] = page_idx
+                                    break
+                            for it in buf['shots']:
+                                if it.get('index') == assigned_index:
+                                    it['page_index'] = page_idx
+                                    break
+                    else:
+                        log(f"[buffer] xml skipped (duplicate index) idx={assigned_index}", "yellow")
             except Exception:
                 pass
 
