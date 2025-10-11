@@ -14,11 +14,13 @@ object ElementController {
     fun getCurrentElementTree(activity: Activity, callback: (GenericElement) -> Unit) {
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
+                Log.d(TAG, "当前页面为Native页面")
                 NativeController.getElementTree(activity) { elementTree ->
                     callback(elementTree)
                 }
             }
             PageSniffer.PageType.WEB_VIEW -> {
+                Log.d(TAG, "当前页面为WebView页面")
                 val webView = findWebView(activity)
                 if (webView != null) {
                     WebViewController.getElementTree(webView) { elementTree ->
@@ -94,6 +96,24 @@ object ElementController {
             PageSniffer.PageType.NATIVE -> {
                 NativeController.clickByCoordinateDp(activity, xDp.toFloat(), yDp.toFloat()) { success ->
                     callback(success)
+                }
+            }
+            PageSniffer.PageType.WEB_VIEW -> {
+                val webView = findWebView(activity)
+                if (webView != null) {
+                    WebViewController.clickByCoordinateDp(webView, xDp.toFloat(), yDp.toFloat()) { success ->
+                        if (!success) {
+                            // WebView坐标点击失败
+                            Log.e(TAG, "WebView坐标点击失败")
+                            callback(false)
+                        } else {
+                            callback(true)
+                        }
+                    }
+                } else {
+                    // 未找到WebView时,报错
+                    Log.e(TAG, "页面识别为WebView，但是未找到WebView")
+                    callback(false)
                 }
             }
             else -> {

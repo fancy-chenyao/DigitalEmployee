@@ -81,7 +81,7 @@ class MobileGPTSpeechRecognizer(private val context: Context) : TextToSpeech.OnI
         // 暂时改为 Toast 提示，并支持长文本与更长显示时间
         showEnhancedToast(text)
         // 保留原逻辑，后续恢复时只需改回：
-        mTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_id")
+//        mTts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_id")
         if (needResponse) {
             sttOn = true
         }

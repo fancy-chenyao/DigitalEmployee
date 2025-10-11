@@ -29,8 +29,8 @@ object PageSniffer {
 
         // 基于视图/类/字段特征判定（与具体Activity无关，通用）
         return when {
-            findWebView(rootView) -> PageType.WEB_VIEW
-            hasVisibleNativeControls(rootView) -> PageType.NATIVE
+            findWebView(rootView) -> PageType.WEB_VIEW // 只要包含一个WebView组件，就认为是WebView
+            hasVisibleNativeControls(rootView) -> PageType.NATIVE // 仅当所有控件都是原生控件时才认为页面为Native
             else -> PageType.UNKNOWN
         }
     }

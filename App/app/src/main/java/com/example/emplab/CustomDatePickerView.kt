@@ -250,6 +250,7 @@ class CustomDatePickerView @JvmOverloads constructor(
 
 //        // // 更新显示
 //       updateDisplay()
+//       updateDisplay()
 
 
         // 自动确认选择的日期并关闭日期选择器
