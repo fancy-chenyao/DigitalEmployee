@@ -907,6 +907,14 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
+                    
+                    # 参数验证
+                    if not parsed_xml or not hierarchy_xml or not encoded_xml:
+                        log(f"XML参数无效: parsed_xml={bool(parsed_xml)}, hierarchy_xml={bool(hierarchy_xml)}, encoded_xml={bool(encoded_xml)}", "red")
+                        self._send_finish_action(client_socket, "XML参数无效")
+                        return
+                    
+                    log(f"调用get_next_action处理任务错误，参数长度: parsed={len(parsed_xml)}, hierarchy={len(hierarchy_xml)}, encoded={len(encoded_xml)}", "blue")
                     action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=True,
                                                        action_failed=False, suggestions=suggestion)
 
@@ -917,6 +925,14 @@ class Server:
                         log("MobileGPT实例不存在，无法处理错误", "red")
                         self._send_finish_action(client_socket, "MobileGPT实例不存在")
                         return
+                    
+                    # 参数验证
+                    if not parsed_xml or not hierarchy_xml or not encoded_xml:
+                        log(f"XML参数无效: parsed_xml={bool(parsed_xml)}, hierarchy_xml={bool(hierarchy_xml)}, encoded_xml={bool(encoded_xml)}", "red")
+                        self._send_finish_action(client_socket, "XML参数无效")
+                        return
+                    
+                    log(f"调用get_next_action处理动作错误，参数长度: parsed={len(parsed_xml)}, hierarchy={len(hierarchy_xml)}, encoded={len(encoded_xml)}", "blue")
                     action = mobilegpt.get_next_action(parsed_xml, hierarchy_xml, encoded_xml, subtask_failed=False,
                                                        action_failed=True, suggestions=suggestion)
 
@@ -928,9 +944,24 @@ class Server:
                     log("MobileGPT未返回动作", "yellow")
 
         except Exception as e:
+            import traceback
             log(f"处理错误消息时发生异常: {e}", "red")
+            log(f"异常类型: {type(e).__name__}", "red")
+            log(f"异常堆栈: {traceback.format_exc()}", "red")
+            
+            # 检查关键参数状态
+            try:
+                log(f"错误信息: {error_content[:100] if error_content else 'None'}", "red")
+                log(f"MobileGPT实例状态: {mobilegpt is not None}", "red")
+                if mobilegpt:
+                    log(f"MobileGPT内存管理器状态: {hasattr(mobilegpt, 'memory') and mobilegpt.memory is not None}", "red")
+                    log(f"当前页面索引: {getattr(mobilegpt, 'current_page_index', 'None')}", "red")
+                    log(f"当前子任务: {getattr(mobilegpt, 'current_subtask', 'None')}", "red")
+            except Exception as debug_e:
+                log(f"调试信息获取失败: {debug_e}", "red")
+            
             # 发送默认的finish动作作为兜底
-            self._send_finish_action(client_socket, "处理错误消息时发生异常")
+            self._send_finish_action(client_socket, f"处理错误消息时发生异常: {type(e).__name__}")
 
     def _send_back_action(self, client_socket):
         """发送回退动作"""

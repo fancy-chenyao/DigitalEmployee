@@ -71,24 +71,56 @@ class MobileGPT:
 
     def get_next_action(self, parsed_xml=None, hierarchy_xml=None, encoded_xml=None, subtask_failed=False, action_failed=False, suggestions=None):
         log(":::::::::MobileGPT received new screen:::::::::", 'blue')
-        parsed_xml = parsed_xml or self.parsed_xml
-        hierarchy_xml = hierarchy_xml or self.hierarchy_xml
-        encoded_xml = encoded_xml or self.encoded_xml
+        
+        try:
+            parsed_xml = parsed_xml or self.parsed_xml
+            hierarchy_xml = hierarchy_xml or self.hierarchy_xml
+            encoded_xml = encoded_xml or self.encoded_xml
 
-        self.parsed_xml = parsed_xml
-        self.hierarchy_xml = hierarchy_xml
-        self.encoded_xml = encoded_xml
+            # 参数验证
+            if not parsed_xml or not hierarchy_xml or not encoded_xml:
+                log(f"get_next_action参数无效: parsed_xml={bool(parsed_xml)}, hierarchy_xml={bool(hierarchy_xml)}, encoded_xml={bool(encoded_xml)}", "red")
+                return None
 
-        self.current_screen_xml = encoded_xml
-        # 检查当前界面是否匹配历史页面（调用内存的search_node方法）
-        page_index, new_subtasks = self.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+            self.parsed_xml = parsed_xml
+            self.hierarchy_xml = hierarchy_xml
+            self.encoded_xml = encoded_xml
+
+            self.current_screen_xml = encoded_xml
+            
+            # 检查内存管理器状态
+            if not hasattr(self, 'memory') or self.memory is None:
+                log("内存管理器未初始化", "red")
+                return None
+            
+            log(f"开始搜索节点，参数长度: parsed={len(parsed_xml)}, hierarchy={len(hierarchy_xml)}, encoded={len(encoded_xml)}", "blue")
+            # 检查当前界面是否匹配历史页面（调用内存的search_node方法）
+            page_index, new_subtasks = self.memory.search_node(parsed_xml, hierarchy_xml, encoded_xml)
+            log(f"搜索节点完成: page_index={page_index}, new_subtasks={len(new_subtasks) if new_subtasks else 0}", "blue")
+            
+        except Exception as e:
+            import traceback
+            log(f"get_next_action初始化阶段异常: {e}", "red")
+            log(f"异常类型: {type(e).__name__}", "red")
+            log(f"异常堆栈: {traceback.format_exc()}", "red")
+            return None
 
         # 若未匹配到历史页面（page_index == -1），调用ExploreAgent探索新界面
         if page_index == -1:
-            page_index = self.explore_agent.explore(parsed_xml, hierarchy_xml, encoded_xml)
+            try:
+                log("开始探索新界面", "blue")
+                page_index = self.explore_agent.explore(parsed_xml, hierarchy_xml, encoded_xml)
+                log(f"探索完成: page_index={page_index}", "blue")
+            except Exception as e:
+                import traceback
+                log(f"探索新界面异常: {e}", "red")
+                log(f"异常类型: {type(e).__name__}", "red")
+                log(f"异常堆栈: {traceback.format_exc()}", "red")
+                return None
 
         # 若页面索引变化（进入新页面），初始化页面管理器并结束当前子任务
         if page_index != self.current_page_index:
+            log(f"页面切换: {self.current_page_index} -> {page_index}", "blue")
             # 页面切换前先尝试将上一页的数据写入上一页目录，避免错位
             try:
                 if self.current_page_index is not None and self.current_page_index >= 0:
@@ -185,10 +217,20 @@ class MobileGPT:
         #             ask_action = {"name": "ask", "parameters": {"info_name": key, "question": question}}
         #             return ask_action
         if action_failed:
-            self.current_subtask_data['action'].pop()
+            self.current_subtask_data['actions'].pop()
             log(f"删除上一个出错动作")
         # 从内存中获取历史动作（回忆模式）
-        next_action = self.memory.get_next_action(self.current_subtask, self.encoded_xml)
+        try:
+            log(f"开始获取历史动作，子任务: {self.current_subtask['name'] if self.current_subtask else 'None'}", "blue")
+            next_action = self.memory.get_next_action(self.current_subtask, self.encoded_xml)
+            log(f"历史动作获取完成: {bool(next_action)}", "blue")
+        except Exception as e:
+            import traceback
+            log(f"获取历史动作异常: {e}", "red")
+            log(f"异常类型: {type(e).__name__}", "red")
+            log(f"异常堆栈: {traceback.format_exc()}", "red")
+            return None
+            
         current_action_data = {"page_index": self.current_page_index, "action": next_action, "screen": self.encoded_xml,
                                "example": {}}
 
@@ -200,9 +242,16 @@ class MobileGPT:
             # 若内存中有动作示例，调用推导智能体泛化动作（适配当前界面）
             if "examples" in next_action:
                 log(f"🔥 热启动: 使用历史示例进行动作泛化，示例数量={len(next_action['examples'])}", "green")
-                next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions, examples=next_action['examples'])
-                current_action_data['action'] = next_action
-                current_action_data['example'] = example
+                try:
+                    next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions, examples=next_action['examples'])
+                    current_action_data['action'] = next_action
+                    current_action_data['example'] = example
+                except Exception as e:
+                    import traceback
+                    log(f"推导智能体泛化动作异常: {e}", "red")
+                    log(f"异常类型: {type(e).__name__}", "red")
+                    log(f"异常堆栈: {traceback.format_exc()}", "red")
+                    return None
             else:
                 log(f"🔥 热启动: 直接使用历史动作", "green")
 
@@ -213,9 +262,16 @@ class MobileGPT:
                 self.subtask_status = Status.LEARN
                 log(f"❄️ 冷启动: 子任务状态切换到学习模式，将生成新动作", "yellow")
                 # Here
-                next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions)
-                current_action_data['action'] = next_action
-                current_action_data['example'] = example
+                try:
+                    next_action, example = self.derive_agent.derive(self.encoded_xml, action_failed, suggestions)
+                    current_action_data['action'] = next_action
+                    current_action_data['example'] = example
+                except Exception as e:
+                    import traceback
+                    log(f"推导智能体生成新动作异常: {e}", "red")
+                    log(f"异常类型: {type(e).__name__}", "red")
+                    log(f"异常堆栈: {traceback.format_exc()}", "red")
+                    return None
 
             # 若处于回忆模式但无动作，处理任务分歧（重新选择子任务）
             elif self.subtask_status == Status.RECALL:
@@ -243,19 +299,8 @@ class MobileGPT:
         shot_indices = {item.get('index') for item in buf['shots'] if 'index' in item}
         common_all = sorted(list(xml_indices.intersection(shot_indices)))
         
-        # 过滤到当前页
-        common = []
-        for idx in common_all:
-            xml_tag = next((it for it in buf['xmls'] if it.get('index') == idx), None)
-            shot_tag = next((it for it in buf['shots'] if it.get('index') == idx), None)
-            if xml_tag is None or shot_tag is None:
-                continue
-            page_tag_xml = xml_tag.get('page_index', None)
-            page_tag_shot = shot_tag.get('page_index', None)
-            # 若打了标签且与当前页不一致，则跳过；未打标签则允许
-            if (page_tag_xml is not None and page_tag_xml != page_index) or (page_tag_shot is not None and page_tag_shot != page_index):
-                continue
-            common.append(idx)
+        # 不再按页面过滤，所有匹配的索引都各自写入以索引为页面目录的路径
+        common = common_all
         
         if not common:
             return
@@ -277,18 +322,14 @@ class MobileGPT:
             if not xml_item or not shot_item:
                 continue
 
-            # 确定目标页面：优先使用标签的page_index，否则使用传入的page_index
-            xml_page_tag = xml_item.get('page_index', None)
-            shot_page_tag = shot_item.get('page_index', None)
-            target_page = xml_page_tag if xml_page_tag is not None else (shot_page_tag if shot_page_tag is not None else page_index)
-            
-            # 目标目录
+            # 目标页面目录：直接使用 index 作为页面编号（pages/{index}/screen）
             task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
-            dest_dir = get_screen_bundle_dir(task_name, target_page)
+            dest_dir = get_screen_bundle_dir(task_name, index)
 
             # 写 screenshot
             try:
                 import os
+                os.makedirs(dest_dir, exist_ok=True)
                 shot_bytes = shot_item.get('bytes', b'')
                 screenshot_path = os.path.join(dest_dir, 'screenshot.jpg')
                 with open(screenshot_path, 'wb') as f:
@@ -314,8 +355,6 @@ class MobileGPT:
                 encoded = ET.tostring(tree, encoding='unicode')
                 pretty = minidom.parseString(encoded).toprettyxml()
 
-                import os
-                os.makedirs(dest_dir, exist_ok=True)
                 with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
                     f.write(raw_xml)
                 with open(os.path.join(dest_dir, 'parsed.xml'), 'w', encoding='utf-8') as f:
@@ -330,7 +369,6 @@ class MobileGPT:
                 flushed_count += 1
             except Exception as e:
                 try:
-                    import os
                     with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
                         f.write(raw_xml)
                 except Exception:
@@ -339,6 +377,50 @@ class MobileGPT:
         
         if flushed_count > 0:
             log(f"[flush] flushed {flushed_count} pairs to page {page_index}", "green")
+
+    def __flush_all_buffers(self) -> None:
+        """在任务结束时flush所有缓冲中的数据到对应的页面目录。"""
+        buf = getattr(self, '_local_buffer', None)
+        if not buf or (not buf.get('xmls') or not buf.get('shots')):
+            log("[flush_all] No data in buffer to flush", "blue")
+            return
+
+        # 获取所有共同索引
+        xml_indices = {item.get('index') for item in buf['xmls'] if 'index' in item}
+        shot_indices = {item.get('index') for item in buf['shots'] if 'index' in item}
+        common_all = sorted(list(xml_indices.intersection(shot_indices)))
+        
+        if not common_all:
+            log("[flush_all] No common indices found", "blue")
+            return
+
+        log(f"[flush_all] Found {len(common_all)} indices to flush: {common_all}", "blue")
+        
+        # 按页面分组处理
+        page_groups = {}
+        for idx in common_all:
+            xml_item = next((it for it in buf['xmls'] if it.get('index') == idx), None)
+            shot_item = next((it for it in buf['shots'] if it.get('index') == idx), None)
+            if xml_item is None or shot_item is None:
+                continue
+                
+            # 确定目标页面
+            xml_page_tag = xml_item.get('page_index', None)
+            shot_page_tag = shot_item.get('page_index', None)
+            target_page = xml_page_tag if xml_page_tag is not None else (shot_page_tag if shot_page_tag is not None else self.current_page_index)
+            
+            if target_page not in page_groups:
+                page_groups[target_page] = []
+            page_groups[target_page].append(idx)
+
+        # 为每个页面flush数据
+        total_flushed = 0
+        for page_index, indices in page_groups.items():
+            log(f"[flush_all] Flushing {len(indices)} indices to page {page_index}: {indices}", "blue")
+            self.__flush_buffer_to_page(page_index)
+            total_flushed += len(indices)
+
+        log(f"[flush_all] Total flushed {total_flushed} pairs across {len(page_groups)} pages", "green")
 
     def set_qa_answer(self, info_name: str, question: str, answer: str):
         qa = {"info": info_name, "question": question, "answer": answer}
@@ -451,12 +533,15 @@ class MobileGPT:
         """
         log("------------END OF THE TASK------------", "blue")
         
+        # 在任务结束前，flush所有缓冲中的数据
+        self.__flush_all_buffers()
+        
         self.end_time = time.time()
         elapsed_time = self.end_time - self.start_time
         minutes = int(elapsed_time / 60)
         seconds = int(elapsed_time)
         
-        log(f"""Completed the execution of “{self.instruction}” you commanded, and the Task took a total of [{minutes} minutes({seconds} seconds)] to run.""", "green")
+        log(f"""Completed the execution of "{self.instruction}" you commanded, and the Task took a total of [{minutes} minutes({seconds} seconds)] to run.""", "green")
         
         self.current_subtask = None
         self.subtask_status = Status.WAIT
@@ -467,13 +552,13 @@ class MobileGPT:
         self.subtask_history = [f'Performed an instruction {self.instruction}']
 
         self.task_path.append({"page_index": self.current_page_index,  # 当前页面索引（任务结束时所在的页面）
-                               "subtask_name": "finish",  # 子任务名称（固定为“finish”）
+                               "subtask_name": "finish",  # 子任务名称（固定为"finish"）
                                "subtask": {"name": "finish", # 子任务详细信息
                                            "description": "Use this to signal that the task has been completed",
                                            "parameters": {}
                                            },
                                "actions": []})
-        if self.task_status == Status.LEARN: # 判断当前任务是否处于“学习模式”（Status.LEARN）
+        if self.task_status == Status.LEARN: # 判断当前任务是否处于"学习模式"（Status.LEARN）
             # self.task_path = self.memory.merge_subtasks(self.task_path)
 
             # 使用 MongoDB 集合 'global_tasks' 保存全局任务
