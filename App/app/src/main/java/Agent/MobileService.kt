@@ -291,19 +291,19 @@ class MobileService : Service() {
         // xmplPending主要为了控制该函数是否需要相应页面变化，例如在showActions时，避免因为弹出悬浮窗导致监听页面变化进而发送XML
         if (xmlPending) {
             if (firstScreen && screenNeedUpdate){
-                // 首屏等待缩短到自适应（默认 800ms-1000ms），并保留兜底超时
-                Log.d(TAG, "第一次打开应用，设置短延迟与兜底超时");
+                // for first screen, we wait 5s for loading app;
+                Log.d(TAG, "第一次打开应用，设置延迟强制发送");
                 screenUpdateTimeoutRunnable?.let {
-                    mainThreadHandler.postDelayed(it, 1200)
+                    mainThreadHandler.postDelayed(it, 2000)
                 }
                 screenNeedUpdate = false;
 
             } else if (!firstScreen) {
                 if (screenNeedUpdate){
-                    Log.d(TAG, "设置短防抖等待发送以及兜底超时")
+                    Log.d(TAG, "设置防抖等待发送以及延迟强制发送")
                 }
                 else{
-                    Log.d(TAG, "只设置短防抖等待发送")
+                    Log.d(TAG, "只设置防抖等待发送")
                 }
                 if (screenNeedUpdate) {
                     // 取消点击动作的回调
@@ -315,14 +315,13 @@ class MobileService : Service() {
                         mainThreadHandler.removeCallbacks(it)
                     }
                     screenUpdateTimeoutRunnable?.let {
-                        mainThreadHandler.postDelayed(it, 6000)
+                        mainThreadHandler.postDelayed(it, 10000)
                     }
                     screenNeedUpdate = false;
                 }
                 screenUpdateWaitRunnable?.let {
                     mainThreadHandler.removeCallbacks(it)
-                    // 将原 5000ms 防抖缩短至 800ms，自适应可在后续按设备表现微调
-                    mainThreadHandler.postDelayed(it, 800)
+                    mainThreadHandler.postDelayed(it, 5000)
                 }
             }
         }else {
@@ -828,8 +827,6 @@ class MobileService : Service() {
                         verifyClickSuccessWithPageChange(preClickActivity, preClickMonitoredActivity, preClickViewTreeHash) { verified ->
                             if (verified) {
                                 Log.d(TAG, "通过view引用点击成功且已验证生效")
-                                    // 触发快速回传
-                                    quickSendCurrentScreen()
                             } else {
                                 Log.w(TAG, "view引用点击操作成功但未生效，回退到传统方式")
                                 fallbackClickAction(activity, element, preClickActivity, preClickMonitoredActivity, preClickViewTreeHash)
@@ -852,8 +849,6 @@ class MobileService : Service() {
                         verifyClickSuccessWithPageChange(preClickActivity, preClickMonitoredActivity, preClickViewTreeHash) { verified ->
                             if (verified) {
                                 Log.d(TAG, "传统点击成功且已验证生效")
-                                    // 触发快速回传
-                                    quickSendCurrentScreen()
                             } else {
                                 Log.w(TAG, "传统点击操作成功但未生效，回退到坐标点击")
                                 executeCoordinateClick(activity, element)
@@ -899,8 +894,6 @@ class MobileService : Service() {
                     verifyClickSuccessWithPageChange(preClickActivity, preClickMonitoredActivity, preClickViewTreeHash) { verified ->
                         if (verified) {
                             Log.d(TAG, "传统回退点击成功且已验证生效")
-                            // 触发快速回传
-                            quickSendCurrentScreen()
                         } else {
                             Log.w(TAG, "传统回退点击操作成功但未生效，使用坐标点击")
                             executeCoordinateClick(activity, element)
@@ -1149,8 +1142,6 @@ class MobileService : Service() {
                         verifyLongClickSuccessWithPageChange(preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash) { verified ->
                             if (verified) {
                                 Log.d(TAG, "通过view引用长按成功且已验证生效")
-                                    // 触发快速回传
-                                    quickSendCurrentScreen()
                             } else {
                                 Log.w(TAG, "view引用长按操作成功但未生效，回退到传统方式")
                                 fallbackLongClickAction(activity, element, preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash)
@@ -1173,8 +1164,6 @@ class MobileService : Service() {
                         verifyLongClickSuccessWithPageChange(preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash) { verified ->
                             if (verified) {
                                 Log.d(TAG, "传统长按成功且已验证生效")
-                                    // 触发快速回传
-                                    quickSendCurrentScreen()
                             } else {
                                 Log.w(TAG, "传统长按操作成功但未生效，回退到坐标长按")
                                 executeCoordinateLongClick(activity, element)
@@ -1217,8 +1206,6 @@ class MobileService : Service() {
                 verifyLongClickSuccessWithPageChange(preLongClickActivity, preLongClickMonitoredActivity, preLongClickViewTreeHash) { verified ->
                     if (verified) {
                         Log.d(TAG, "传统长按回退成功且已验证生效")
-                        // 触发快速回传
-                        quickSendCurrentScreen()
                     } else {
                         Log.w(TAG, "传统长按回退操作成功但未生效，回退到坐标长按")
                         executeCoordinateLongClick(activity, element)
@@ -1932,18 +1919,7 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
      */
     private fun sendScreen() {
         try {
-            // 发送XML数据优先
-            mExecutorService.execute {
-                try {
-                    Log.d("MobileService", "开始发送XML")
-                    val message = MobileGPTMessage().createXmlMessage(currentScreenXML)
-                    mClient?.sendMessage(message)
-                } catch (e: Exception) {
-                    Log.e("MobileService", "发送XML失败", e)
-                }
-            }
-
-            // 然后尝试发送截图（可选，可能稍后补发）
+            // 检查截图是否可用
             val screenshot = currentScreenShot
             if (screenshot != null && !screenshot.isRecycled) {
                 mExecutorService.execute {
@@ -1958,52 +1934,23 @@ ${element.children.joinToString("") { it.toXmlString(1) }}
             } else {
                 Log.w("MobileService", "截图不可用，跳过发送截图")
             }
+
+            // 发送XML数据
+            mExecutorService.execute {
+                try {
+                    Log.d("MobileService", "开始发送XML")
+                    val message = MobileGPTMessage().createXmlMessage(currentScreenXML)
+                    mClient?.sendMessage(message)
+                } catch (e: Exception) {
+                    Log.e("MobileService", "发送XML失败", e)
+                }
+            }
             // 发送屏幕信息后，设置以下变量都为false，不响应页面变化，同时不进行屏幕发送
         screenNeedUpdate = false
             xmlPending = false
         firstScreen = false
         } catch (e: Exception) {
             Log.e("MobileService", "sendScreen方法执行异常", e)
-        }
-    }
-
-    /**
-     * 快速回传：立即发送XML，随后尽快补发截图
-     */
-    private fun quickSendCurrentScreen() {
-        try {
-            // 先异步保存并发送XML
-            saveCurrScreenXML {
-                mExecutorService.execute {
-                    try {
-                        Log.d(TAG, "[QuickPath] 发送XML")
-                        val message = MobileGPTMessage().createXmlMessage(currentScreenXML)
-                        mClient?.sendMessage(message)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "[QuickPath] 发送XML失败", e)
-                    }
-                }
-            }
-
-            // 并行保存截图，完成后再发送（不阻塞XML）
-            saveCurrentScreenShot {
-                val screenshot = currentScreenShot
-                if (screenshot != null && !screenshot.isRecycled) {
-                    mExecutorService.execute {
-                        try {
-                            Log.d(TAG, "[QuickPath] 发送截图")
-                            val message = MobileGPTMessage().createScreenshotMessage(screenshot)
-                            mClient?.sendMessage(message)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "[QuickPath] 发送截图失败", e)
-                        }
-                    }
-                } else {
-                    Log.w(TAG, "[QuickPath] 截图不可用，跳过发送截图")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "[QuickPath] quickSendCurrentScreen异常", e)
         }
     }
 
