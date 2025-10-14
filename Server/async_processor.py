@@ -337,9 +337,19 @@ class AsyncProcessor:
                 }
                 is_new_task = True
             
-            # 创建MobileGPT实例
+            # 使用已有的MobileGPT实例
             if client_socket is not None:
-                mobileGPT = MobileGPT(client_socket)
+                # 从session_manager获取已有的MobileGPT实例
+                from session_manager import SessionManager
+                session = SessionManager().get_session(session_id)
+                if session and session.mobilegpt:
+                    mobileGPT = session.mobilegpt
+                else:
+                    mobileGPT = MobileGPT(client_socket)
+                    # 保存到session
+                    if session:
+                        session.mobilegpt = mobileGPT
+                
                 mobileGPT.init(instruction, task, is_new_task)
                 
                 # 验证初始化是否成功
@@ -445,30 +455,19 @@ class AsyncProcessor:
                         if k in element.attrib:
                             del element.attrib[k]
                 encoded_xml = ET.tostring(tree, encoding='unicode')
-                # 缓存原始XML，供事后落盘；与最近一次截图对齐（_screen_count - 1）
-                current_count = getattr(mobilegpt, '_screen_count', 0)
-                screen_count = max(current_count - 1, 0)
+                # 缓存原始XML，供事后落盘；不再依赖索引去重，后续按 page_index 配对
+                screen_count = getattr(mobilegpt, '_screen_count', 0)
                 buf = getattr(mobilegpt, '_local_buffer', None)
                 if buf is None:
                     buf = {'xmls': [], 'shots': []}
                     setattr(mobilegpt, '_local_buffer', buf)
-                # 避免重复 index 覆盖，优先保留最早的一份
-                if not any(it.get('index') == screen_count for it in buf['xmls']):
-                    buf['xmls'].append({'index': screen_count, 'xml': xml_content})
-                    log(f"[buffer] xml queued idx={screen_count}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
-                    # 若已存在同 index 截图，则给成对项打上 page_index 标签
-                    if any(it.get('index') == screen_count for it in buf['shots']):
-                        page_idx = getattr(mobilegpt, 'current_page_index', -1)
-                        for it in buf['xmls']:
-                            if it.get('index') == screen_count:
-                                it['page_index'] = page_idx
-                                break
-                        for it in buf['shots']:
-                            if it.get('index') == screen_count:
-                                it['page_index'] = page_idx
-                                break
-                else:
-                    log(f"[buffer] xml skipped (duplicate index) idx={screen_count}", "yellow")
+                # 不再按 index 去重：始终入队，并立刻标注 page_index
+                buf['xmls'].append({'index': screen_count, 'xml': xml_content})
+                try:
+                    buf['xmls'][-1]['page_index'] = getattr(mobilegpt, 'current_page_index', -1)
+                except Exception:
+                    pass
+                log(f"[buffer] xml queued idx={screen_count}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
             
             log(f"XML异步解析完成: parsed={len(parsed_xml)}字符, hierarchy={len(hierarchy_xml)}字符, encoded={len(encoded_xml)}字符", "green")
             
@@ -516,9 +515,18 @@ class AsyncProcessor:
             task_name = getattr(getattr(mobilegpt, 'memory', None), 'task_name', 'untitled') or 'untitled'
             db_available = bool(Config.ENABLE_DB) and check_connection()
 
-            # 统一由截图路径递增 _screen_count：这里自增，作为唯一自增入口
-            screen_count = getattr(mobilegpt, '_screen_count', 0)
-            setattr(mobilegpt, '_screen_count', screen_count + 1)
+            # 统一由会话维度递增计数，若无会话信息则回退到MobileGPT
+            try:
+                from session_manager import SessionManager
+                session = SessionManager().get_session(session_id)
+            except Exception:
+                session = None
+            if session is not None:
+                screen_count = getattr(session, 'screen_count', 0)
+                setattr(session, 'screen_count', screen_count + 1)
+            else:
+                screen_count = getattr(mobilegpt, '_screen_count', 0)
+                setattr(mobilegpt, '_screen_count', screen_count + 1)
 
             if db_available:
                 try:
@@ -533,14 +541,29 @@ class AsyncProcessor:
                 except Exception:
                     pass
             else:
-                # 本地模式：不立即写盘，缓存截图；先自增，再把 index 分配给截图
-                buf = getattr(mobilegpt, '_local_buffer', None)
-                if buf is None:
-                    buf = {'xmls': [], 'shots': []}
-                    setattr(mobilegpt, '_local_buffer', buf)
-                buf['shots'].append({'index': screen_count, 'bytes': screenshot_data})
-                from log_config import log
-                log(f"[buffer] shot queued idx={screen_count}, size={len(screenshot_data)}, shots={len(buf['shots'])}", "blue")
+                # 本地模式：不立即写盘，缓存截图；MobileGPT 未就绪时先入会话预缓冲
+                if session is not None and getattr(session, 'mobilegpt', None) is None:
+                    if session.prebuffer is None:
+                        session.prebuffer = {'xmls': [], 'shots': []}
+                    session.prebuffer['shots'].append({'index': screen_count, 'bytes': screenshot_data})
+                    try:
+                        session.prebuffer['shots'][-1]['page_index'] = -1
+                    except Exception:
+                        pass
+                    from log_config import log
+                    log(f"[buffer] shot queued (session) idx={screen_count}, size={len(screenshot_data)}, shots={len(session.prebuffer['shots'])}", "blue")
+                else:
+                    buf = getattr(mobilegpt, '_local_buffer', None)
+                    if buf is None:
+                        buf = {'xmls': [], 'shots': []}
+                        setattr(mobilegpt, '_local_buffer', buf)
+                    buf['shots'].append({'index': screen_count, 'bytes': screenshot_data})
+                    try:
+                        buf['shots'][-1]['page_index'] = getattr(mobilegpt, 'current_page_index', -1)
+                    except Exception:
+                        pass
+                    from log_config import log
+                    log(f"[buffer] shot queued idx={screen_count}, size={len(screenshot_data)}, shots={len(buf['shots'])}", "blue")
 
             return {"status": "screenshot_processed", "data_size": len(screenshot_data), "session_id": session_id}
         except Exception as e:

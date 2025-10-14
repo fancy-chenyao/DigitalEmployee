@@ -123,6 +123,11 @@ class Server:
         try:
             # 为会话创建MobileGPT实例
             mobileGPT = MobileGPT(session.client_socket)
+            try:
+                # 将session_id传入MobileGPT，便于初始化后迁移会话预缓冲
+                setattr(mobileGPT, 'session_id', session.session_id)
+            except Exception:
+                pass
             session.mobilegpt = mobileGPT
             
             # 处理客户端消息
@@ -394,9 +399,11 @@ class Server:
             
             log(f"TaskAgent解析结果: 任务={task.get('name', 'unknown')}, 新任务={is_new_task}", "green")
             
-            # 创建MobileGPT实例处理业务逻辑
-            mobileGPT = MobileGPT(session.client_socket)
-            session.mobilegpt = mobileGPT
+            # 使用已有的MobileGPT实例处理业务逻辑
+            mobileGPT = session.mobilegpt
+            if mobileGPT is None:
+                mobileGPT = MobileGPT(session.client_socket)
+                session.mobilegpt = mobileGPT
             
             # 初始化MobileGPT
             mobileGPT.init(instruction, task, is_new_task)
@@ -499,31 +506,22 @@ class Server:
             try:
                 mobilegpt = session.mobilegpt
                 if mobilegpt is not None:
-                    # XML 始终与“最近一次截图”的索引对齐：使用 current_count - 1
-                    current_count = getattr(mobilegpt, '_screen_count', 0)
-                    assigned_index = max(current_count - 1, 0)
+                    # 不再依赖(_screen_count - 1)对齐方式；直接使用当前计数作为参考索引
+                    assigned_index = getattr(mobilegpt, '_screen_count', 0)
                     buf = getattr(mobilegpt, '_local_buffer', None)
                     if buf is None:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
-                    # 避免同一 index 存在多个 XML，优先保留最早的一份
-                    if not any(it.get('index') == assigned_index for it in buf['xmls']):
-                        buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
-                        log(f"[buffer] xml queued (optimized) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
-                        # 若已存在同 index 截图，则给成对项打上 page_index 标签
-                        if any(it.get('index') == assigned_index for it in buf['shots']):
-                            page_idx = getattr(mobilegpt, 'current_page_index', -1)
-                            # 标记 xml 与 shot 项
-                            for it in buf['xmls']:
-                                if it.get('index') == assigned_index:
-                                    it['page_index'] = page_idx
-                                    break
-                            for it in buf['shots']:
-                                if it.get('index') == assigned_index:
-                                    it['page_index'] = page_idx
-                                    break
-                    else:
-                        log(f"[buffer] xml skipped (duplicate index) idx={assigned_index}", "yellow")
+                    # 不再按 index 去重：始终入队，并立刻标注 page_index
+                    buf['xmls'].append({'index': assigned_index, 'xml': xml_content, 'page_index': getattr(mobilegpt, 'current_page_index', -1)})
+                    log(f"[buffer] xml queued (optimized) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
+                else:
+                    # MobileGPT 未就绪：入会话预缓冲
+                    assigned_index = session.screen_count
+                    if session.prebuffer is None:
+                        session.prebuffer = {'xmls': [], 'shots': []}
+                    session.prebuffer['xmls'].append({'index': assigned_index, 'xml': xml_content, 'page_index': -1})
+                    log(f"[buffer] xml queued (session) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(session.prebuffer['xmls'])}", "blue")
             except Exception as e:
                 log(f"XML缓冲失败: {e}", "red")
             
@@ -551,6 +549,20 @@ class Server:
                 self._send_action_to_client(session, action)
             else:
                 log("MobileGPT未返回动作", "yellow")
+
+            # 动作决策完成后，若此前XML写入了MobileGPT缓冲，则根据最新页面回写该条XML的page_index
+            try:
+                mobilegpt = session.mobilegpt
+                page_idx_after = getattr(mobilegpt, 'current_page_index', -1)
+                assigned_index = getattr(mobilegpt, '_screen_count', 0)
+                buf = getattr(mobilegpt, '_local_buffer', None)
+                if buf is not None:
+                    for it in reversed(buf.get('xmls', [])):
+                        if it.get('index') == assigned_index:
+                            it['page_index'] = page_idx_after
+                            break
+            except Exception:
+                pass
                 
         except Exception as e:
             log(f"优化版本XML处理失败: {e}", "red")
@@ -611,15 +623,19 @@ class Server:
             try:
                 mobilegpt = session.mobilegpt
                 if mobilegpt is not None:
-                    # XML 始终与“最近一次截图”的索引对齐：使用 current_count - 1
-                    current_count = getattr(mobilegpt, '_screen_count', 0)
-                    assigned_index = max(current_count - 1, 0)
+                    # 不再依赖(_screen_count - 1)对齐方式；直接使用当前计数作为参考索引
+                    assigned_index = getattr(mobilegpt, '_screen_count', 0)
                     buf = getattr(mobilegpt, '_local_buffer', None)
                     if buf is None:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
                     if not any(it.get('index') == assigned_index for it in buf['xmls']):
                         buf['xmls'].append({'index': assigned_index, 'xml': xml_content})
+                        # 入队即标记 page_index
+                        try:
+                            buf['xmls'][-1]['page_index'] = getattr(mobilegpt, 'current_page_index', -1)
+                        except Exception:
+                            pass
                         log(f"[buffer] xml queued (direct) idx={assigned_index}, raw_len={len(xml_content)}, xmls={len(buf['xmls'])}", "blue")
                         if any(it.get('index') == assigned_index for it in buf['shots']):
                             page_idx = getattr(mobilegpt, 'current_page_index', -1)
@@ -980,15 +996,19 @@ class Server:
             try:
                 mobilegpt = session.mobilegpt
                 if mobilegpt is not None:
-                    # XML 始终与“最近一次截图”的索引对齐：使用 current_count - 1
-                    current_count = getattr(mobilegpt, '_screen_count', 0)
-                    assigned_index = max(current_count - 1, 0)
+                    # 不再依赖(_screen_count - 1)对齐方式；直接使用当前计数作为参考索引
+                    assigned_index = getattr(mobilegpt, '_screen_count', 0)
                     buf = getattr(mobilegpt, '_local_buffer', None)
                     if buf is None:
                         buf = {'xmls': [], 'shots': []}
                         setattr(mobilegpt, '_local_buffer', buf)
                     if not any(it.get('index') == assigned_index for it in buf['xmls']):
                         buf['xmls'].append({'index': assigned_index, 'xml': current_xml})
+                        # 入队即标记 page_index
+                        try:
+                            buf['xmls'][-1]['page_index'] = getattr(mobilegpt, 'current_page_index', -1)
+                        except Exception:
+                            pass
                         log(f"[buffer] xml queued (direct2) idx={assigned_index}, raw_len={len(current_xml)}, xmls={len(buf['xmls'])}",
                             "blue")
                         if any(it.get('index') == assigned_index for it in buf['shots']):

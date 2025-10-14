@@ -29,10 +29,15 @@ class ClientSession:
     instruction: str = ""
     task_name: str = ""
     is_active: bool = True
+    # 新增：会话级截图计数与预缓冲，避免MobileGPT未初始化期间的数据错位
+    screen_count: int = 0
+    prebuffer: dict = None
     
     def update_activity(self):
         """更新最后活动时间"""
         self.last_activity = datetime.now()
+        if self.prebuffer is None:
+            self.prebuffer = {'xmls': [], 'shots': []}
     
     def is_expired(self, timeout_minutes: int = 30) -> bool:
         """检查会话是否过期"""

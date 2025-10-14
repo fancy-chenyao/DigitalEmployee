@@ -69,6 +69,33 @@ class MobileGPT:
 
         log('Mobile Agent Initialized for Task: ' + task['name'])
 
+        # 会话级预缓冲迁移：若 Session 在 MobileGPT 未就绪时已接收截图/XML，则此处接管
+        try:
+            from session_manager import SessionManager
+            # 这一步需要调用方在外层传入可获取到的 session_id；若无则跳过
+            # 由于此类无法直接知道 session_id，这里仅保留兼容逻辑：若外层在 server 初始化后设置了 self.session_id，则进行迁移
+            session_id = getattr(self, 'session_id', None)
+            if session_id is not None:
+                session = SessionManager().get_session(session_id)
+                if session is not None:
+                    # 同步计数器
+                    setattr(self, '_screen_count', getattr(session, 'screen_count', 0))
+                    # 迁移预缓冲
+                    pre = getattr(session, 'prebuffer', None)
+                    if pre and (pre.get('xmls') or pre.get('shots')):
+                        buf = getattr(self, '_local_buffer', None)
+                        if buf is None:
+                            buf = {'xmls': [], 'shots': []}
+                            setattr(self, '_local_buffer', buf)
+                        buf['xmls'].extend(pre.get('xmls', []))
+                        buf['shots'].extend(pre.get('shots', []))
+                        log(f"[migration] 迁移了 {len(pre.get('xmls', []))}个XML, {len(pre.get('shots', []))}个截图到本地缓冲", "green")
+                        # 清空会话预缓冲
+                        session.prebuffer = {'xmls': [], 'shots': []}
+        except Exception as e:
+            log(f"[migration] 会话预缓冲迁移失败: {e}", "red")
+            pass
+
     def get_next_action(self, parsed_xml=None, hierarchy_xml=None, encoded_xml=None, subtask_failed=False, action_failed=False, suggestions=None):
         log(":::::::::MobileGPT received new screen:::::::::", 'blue')
         parsed_xml = parsed_xml or self.parsed_xml
@@ -99,9 +126,31 @@ class MobileGPT:
                         common_prev = sorted(list(set(xml_idx_prev).intersection(shot_idx_prev)))
                         task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
                         log(f"[page] change prev={self.current_page_index} -> curr={page_index}, task={task_name}, prev_xml_idx={xml_idx_prev}, prev_shot_idx={shot_idx_prev}, prev_common={common_prev}, dest_prev=memory/log/{task_name}/pages/{self.current_page_index}/screen", "blue")
-                        if common_prev:
-                            # 落到上一页
-                            self.__flush_buffer_to_page(self.current_page_index)
+                        # 纠偏：将缓冲中最新的一条截图/最新的一条XML优先标记到新页，避免错位
+                        try:
+                            curr_page = page_index
+                            if shot_idx_prev:
+                                last_shot_idx = max(shot_idx_prev)
+                                for it in reversed(buf['shots']):
+                                    if it.get('index') == last_shot_idx:
+                                        old_page = it.get('page_index', -1)
+                                        it['page_index'] = curr_page
+                                        log(f"[debug] 最新截图 idx={last_shot_idx} 从 page={old_page} 重标到 page={curr_page}", "yellow")
+                                        break
+                            if xml_idx_prev:
+                                last_xml_idx = max(xml_idx_prev)
+                                for it in reversed(buf['xmls']):
+                                    if it.get('index') == last_xml_idx:
+                                        old_page = it.get('page_index', -1)
+                                        it['page_index'] = curr_page
+                                        log(f"[debug] 最新XML idx={last_xml_idx} 从 page={old_page} 重标到 page={curr_page}", "yellow")
+                                        break
+                        except Exception as e:
+                            log(f"[debug] 纠偏过程出错: {e}", "red")
+                            pass
+                        # 无论是否存在共同索引，均尝试按页面落盘上一页
+                        log(f"[debug] 尝试flush上一页 page={self.current_page_index}，缓冲状态: shots={len(buf.get('shots', []))}, xmls={len(buf.get('xmls', []))}", "cyan")
+                        self.__flush_buffer_to_page(self.current_page_index)
             except Exception:
                 pass
             self.memory.init_page_manager(page_index)
@@ -116,6 +165,26 @@ class MobileGPT:
             try:
                 task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
                 buf = getattr(self, '_local_buffer', None)
+                # 首次识别到新页面时，将未标记页的项(-1/None)统一标到当前页，并尝试立即落盘当前页
+                try:
+                    if buf:
+                        unmarked_xmls = 0
+                        unmarked_shots = 0
+                        for it in buf.get('xmls', []):
+                            if it.get('page_index') in (-1, None):
+                                it['page_index'] = page_index
+                                unmarked_xmls += 1
+                        for it in buf.get('shots', []):
+                            if it.get('page_index') in (-1, None):
+                                it['page_index'] = page_index
+                                unmarked_shots += 1
+                        if unmarked_xmls > 0 or unmarked_shots > 0:
+                            log(f"[debug] 新页page={page_index}标记了 {unmarked_xmls}个XML, {unmarked_shots}个截图", "cyan")
+                    log(f"[debug] 尝试flush新页 page={page_index}，缓冲状态: shots={len(buf.get('shots', []))}, xmls={len(buf.get('xmls', []))}", "cyan")
+                    self.__flush_buffer_to_page(page_index)
+                except Exception as e:
+                    log(f"[debug] 新页flush出错: {e}", "red")
+                    pass
                 xml_idx = sorted({it.get('index') for it in (buf.get('xmls') if buf else []) if 'index' in it})
                 shot_idx = sorted({it.get('index') for it in (buf.get('shots') if buf else []) if 'index' in it})
                 common = sorted(list(set(xml_idx).intersection(shot_idx)))
@@ -185,7 +254,7 @@ class MobileGPT:
         #             ask_action = {"name": "ask", "parameters": {"info_name": key, "question": question}}
         #             return ask_action
         if action_failed:
-            self.current_subtask_data['action'].pop()
+            self.current_subtask_data['actions'].pop()
             log(f"删除上一个出错动作")
         # 从内存中获取历史动作（回忆模式）
         next_action = self.memory.get_next_action(self.current_subtask, self.encoded_xml)
@@ -233,72 +302,49 @@ class MobileGPT:
         return next_action
 
     def __flush_buffer_to_page(self, page_index: int) -> None:
-        """将缓冲中所有属于指定页面的(shot+xml)对写入对应页面的 screen 目录。"""
+        """将缓冲中所有属于指定页面的(shot+xml)对写入对应页面的 screen 目录。
+        优先按 page_index 配对；仅在双方都无 page_index 标签时，才回退按 index 配对。"""
         buf = getattr(self, '_local_buffer', None)
         if not buf or (not buf.get('xmls') or not buf.get('shots')):
             return
 
-        # 寻找所有共同 index，且若带有 page_index 标签则仅落当前页的对儿
-        xml_indices = {item.get('index') for item in buf['xmls'] if 'index' in item}
-        shot_indices = {item.get('index') for item in buf['shots'] if 'index' in item}
-        common_all = sorted(list(xml_indices.intersection(shot_indices)))
-        
-        # 过滤到当前页
-        common = []
-        for idx in common_all:
-            xml_tag = next((it for it in buf['xmls'] if it.get('index') == idx), None)
-            shot_tag = next((it for it in buf['shots'] if it.get('index') == idx), None)
-            if xml_tag is None or shot_tag is None:
-                continue
-            page_tag_xml = xml_tag.get('page_index', None)
-            page_tag_shot = shot_tag.get('page_index', None)
-            # 若打了标签且与当前页不一致，则跳过；未打标签则允许
-            if (page_tag_xml is not None and page_tag_xml != page_index) or (page_tag_shot is not None and page_tag_shot != page_index):
-                continue
-            common.append(idx)
-        
-        if not common:
-            return
+        def pop_earliest(lst, predicate):
+            for i in range(len(lst)):
+                if predicate(lst[i]):
+                    return lst.pop(i)
+            return None
 
-        # 处理所有匹配的索引对
         flushed_count = 0
-        for index in common:
-            # 取出对应项（选择最早加入缓冲的匹配项，避免后到的同 index XML 覆盖先到的）
-            xml_item = None
-            for i in range(len(buf['xmls'])):
-                if buf['xmls'][i].get('index') == index:
-                    xml_item = buf['xmls'].pop(i)
-                    break
-            shot_item = None
-            for i in range(len(buf['shots'])):
-                if buf['shots'][i].get('index') == index:
-                    shot_item = buf['shots'].pop(i)
-                    break
-            if not xml_item or not shot_item:
-                continue
 
-            # 确定目标页面：优先使用标签的page_index，否则使用传入的page_index
-            xml_page_tag = xml_item.get('page_index', None)
-            shot_page_tag = shot_item.get('page_index', None)
-            target_page = xml_page_tag if xml_page_tag is not None else (shot_page_tag if shot_page_tag is not None else page_index)
-            
-            # 目标目录
+        # 1) 优先：按 page_index == page_index 的项进行配对与落盘
+        log(f"[debug] flush page={page_index} 开始，缓冲中有 {len(buf.get('xmls', []))}个XML, {len(buf.get('shots', []))}个截图", "cyan")
+        while True:
+            xml_item = pop_earliest(buf['xmls'], lambda it: it.get('page_index') == page_index)
+            shot_item = pop_earliest(buf['shots'], lambda it: it.get('page_index') == page_index)
+            if xml_item is None or shot_item is None:
+                if xml_item is not None:
+                    buf['xmls'].append(xml_item)
+                    log(f"[debug] flush page={page_index} 缺少截图，XML idx={xml_item.get('index')} 放回缓冲", "yellow")
+                if shot_item is not None:
+                    buf['shots'].append(shot_item)
+                    log(f"[debug] flush page={page_index} 缺少XML，截图 idx={shot_item.get('index')} 放回缓冲", "yellow")
+                break
+
+            target_page = page_index
             task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
             dest_dir = get_screen_bundle_dir(task_name, target_page)
 
-            # 写 screenshot
             try:
                 import os
                 shot_bytes = shot_item.get('bytes', b'')
                 screenshot_path = os.path.join(dest_dir, 'screenshot.jpg')
                 with open(screenshot_path, 'wb') as f:
                     f.write(shot_bytes)
-                log(f"[flush] wrote screenshot -> {screenshot_path} ({len(shot_bytes)} bytes)", "blue")
+                log(f"[flush] wrote screenshot idx={shot_item.get('index')} -> {screenshot_path} ({len(shot_bytes)} bytes)", "blue")
             except Exception as e:
-                log(f"[flush] write screenshot failed for index {index}: {e}", "red")
+                log(f"[flush] write screenshot failed (page={page_index}): {e}", "red")
                 continue
 
-            # 生成与写入 XML 变体
             raw_xml = xml_item.get('xml', '')
             try:
                 from screenParser import parseXML
@@ -326,7 +372,7 @@ class MobileGPT:
                     f.write(encoded)
                 with open(os.path.join(dest_dir, 'pretty.xml'), 'w', encoding='utf-8') as f:
                     f.write(pretty)
-                log(f"[flush] wrote xmls -> {dest_dir}/(raw|parsed|hierarchy|html|pretty).xml", "blue")
+                log(f"[flush] wrote xmls idx={xml_item.get('index')} -> {dest_dir}/(raw|parsed|hierarchy|html|pretty).xml", "blue")
                 flushed_count += 1
             except Exception as e:
                 try:
@@ -335,8 +381,79 @@ class MobileGPT:
                         f.write(raw_xml)
                 except Exception:
                     pass
-                log(f"[flush] write xml failed for index {index}: {e}", "red")
-        
+                log(f"[flush] write xml failed (page={page_index}): {e}", "red")
+
+        # 2) 兜底：仅针对仍未打 page_index 的项，按 index 相同进行配对
+        xml_indices = {it.get('index') for it in buf['xmls'] if 'index' in it and it.get('page_index') is None}
+        shot_indices = {it.get('index') for it in buf['shots'] if 'index' in it and it.get('page_index') is None}
+        common = sorted(list(xml_indices.intersection(shot_indices)))
+        for index in common:
+            xml_item = None
+            for i in range(len(buf['xmls'])):
+                if buf['xmls'][i].get('index') == index and buf['xmls'][i].get('page_index') is None:
+                    xml_item = buf['xmls'].pop(i)
+                    break
+            shot_item = None
+            for i in range(len(buf['shots'])):
+                if buf['shots'][i].get('index') == index and buf['shots'][i].get('page_index') is None:
+                    shot_item = buf['shots'].pop(i)
+                    break
+            if not xml_item or not shot_item:
+                continue
+
+            target_page = page_index
+            task_name = getattr(getattr(self, 'memory', None), 'task_name', 'task') or 'task'
+            dest_dir = get_screen_bundle_dir(task_name, target_page)
+
+            try:
+                import os
+                shot_bytes = shot_item.get('bytes', b'')
+                screenshot_path = os.path.join(dest_dir, 'screenshot.jpg')
+                with open(screenshot_path, 'wb') as f:
+                    f.write(shot_bytes)
+                log(f"[flush] wrote screenshot (fallback) -> {screenshot_path} ({len(shot_bytes)} bytes)", "blue")
+            except Exception as e:
+                log(f"[flush] write screenshot failed (fallback, page={page_index}): {e}", "red")
+                continue
+
+            raw_xml = xml_item.get('xml', '')
+            try:
+                from screenParser import parseXML
+                import xml.etree.ElementTree as ET
+                import xml.dom.minidom as minidom
+                parsed = parseXML.parse(raw_xml)
+                hierarchy = parseXML.hierarchy_parse(parsed)
+                tree = ET.fromstring(parsed)
+                for element in tree.iter():
+                    for k in ("bounds", "important", "class"):
+                        if k in element.attrib:
+                            del element.attrib[k]
+                encoded = ET.tostring(tree, encoding='unicode')
+                pretty = minidom.parseString(encoded).toprettyxml()
+
+                import os
+                os.makedirs(dest_dir, exist_ok=True)
+                with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
+                    f.write(raw_xml)
+                with open(os.path.join(dest_dir, 'parsed.xml'), 'w', encoding='utf-8') as f:
+                    f.write(parsed)
+                with open(os.path.join(dest_dir, 'hierarchy.xml'), 'w', encoding='utf-8') as f:
+                    f.write(hierarchy)
+                with open(os.path.join(dest_dir, 'html.xml'), 'w', encoding='utf-8') as f:
+                    f.write(encoded)
+                with open(os.path.join(dest_dir, 'pretty.xml'), 'w', encoding='utf-8') as f:
+                    f.write(pretty)
+                log(f"[flush] wrote xmls (fallback) -> {dest_dir}/(raw|parsed|hierarchy|html|pretty).xml", "blue")
+                flushed_count += 1
+            except Exception as e:
+                try:
+                    import os
+                    with open(os.path.join(dest_dir, 'raw.xml'), 'w', encoding='utf-8') as f:
+                        f.write(raw_xml)
+                except Exception:
+                    pass
+                log(f"[flush] write xml failed (fallback, page={page_index}): {e}", "red")
+
         if flushed_count > 0:
             log(f"[flush] flushed {flushed_count} pairs to page {page_index}", "green")
 
