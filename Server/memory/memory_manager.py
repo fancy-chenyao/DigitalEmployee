@@ -422,12 +422,12 @@ class Memory:
         candidates = self.hierarchy_db.sort_values('similarity', ascending=False).head(5).to_dict(orient='records')
         if candidates:
             highest_similarity = candidates[0]['similarity']
-            log(f"📊 相似度计算: 最高相似度={highest_similarity:.4f}, 阈值=0.95", "cyan")
-            if highest_similarity > 0.95:
+            log(f"📊 相似度计算: 最高相似度={highest_similarity:.4f}, 阈值=0.97", "cyan")
+            if highest_similarity > 0.97:
                 log(f"✅ 页面匹配成功: 页面索引={candidates[0]['index']}, 相似度={highest_similarity:.4f}", "green")
                 return candidates[0]['index']
             else:
-                log(f"❌ 页面匹配失败: 相似度{highest_similarity:.4f}低于阈值0.95", "yellow")
+                log(f"❌ 页面匹配失败: 相似度{highest_similarity:.4f}低于阈值0.97", "yellow")
         else:
             log("❌ 页面匹配失败: 无历史页面数据", "yellow")
         return -1
