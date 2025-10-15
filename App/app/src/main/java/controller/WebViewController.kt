@@ -290,13 +290,16 @@ object WebViewController {
             // 转为窗口坐标（补偿状态栏）
             val statusBarHeight = getStatusBarHeightFromContext(webView.context)
             val xPxWindow = xPxContent
-            val yPxWindow = yPxContent + statusBarHeight
+             val yPxWindow = yPxContent + statusBarHeight
+//            val yPxWindow = yPxContent
 
             // 转为WebView本地坐标
             val loc = IntArray(2)
             webView.getLocationOnScreen(loc)
-            val xLocal = xPxWindow - loc[0]
-            val yLocal = yPxWindow - loc[1]
+             val xLocal = xPxWindow - loc[0]
+             val yLocal = yPxWindow - loc[1]
+//            val xLocal = xPxWindow
+//            val yLocal = yPxWindow
 
             // 先显示发光特效，再延迟发送点击事件，避免UI被阻塞
             try {
@@ -316,7 +319,7 @@ object WebViewController {
             // 延迟发送ACTION_DOWN，让特效先展示
             handler.postDelayed({
                 val downEvent = MotionEvent.obtain(
-                    downTime, downTime, MotionEvent.ACTION_DOWN, xLocal, yLocal, 0
+                    downTime, downTime, MotionEvent.ACTION_DOWN, xPxContent, yPxContent, 0
                 )
                 downResult = webView.dispatchTouchEvent(downEvent)
                 downEvent.recycle()
@@ -325,7 +328,7 @@ object WebViewController {
                 handler.postDelayed({
                     val upTime = SystemClock.uptimeMillis()
                     val upEvent = MotionEvent.obtain(
-                        downTime, upTime, MotionEvent.ACTION_UP, xLocal, yLocal, 0
+                        downTime, upTime, MotionEvent.ACTION_UP, xPxContent, yPxContent, 0
                     )
                     val upResult = webView.dispatchTouchEvent(upEvent)
                     upEvent.recycle()
