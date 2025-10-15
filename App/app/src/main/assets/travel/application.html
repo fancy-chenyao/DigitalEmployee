@@ -11,6 +11,11 @@
             box-sizing: border-box;
         }
         
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+        }
+        
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background-color: #f5f5f5;
@@ -22,7 +27,7 @@
             max-width: 100%;
             margin: 0 auto;
             background-color: #fff;
-            min-height: 100vh;
+            height: 100vh;
         }
         
         /* 顶部标题栏 */
@@ -500,6 +505,9 @@
             console.log('出差申请页面加载完成');
             // 初始化字符计数器
             updateCharCounter();
+            // 适配为一屏显示
+            fitPage();
+            window.addEventListener('resize', fitPage);
             
             // 测试按钮点击事件
             const submitBtn = document.getElementById('submit-btn');
@@ -514,6 +522,44 @@
                 console.log('提交按钮未找到');
             }
         });
+        
+        // 一屏适配：根据视口自动缩放页面，避免滚动
+        function fitPage() {
+            try {
+                const container = document.querySelector('.container');
+                const header = document.querySelector('.header');
+                const form = document.querySelector('.form-container');
+                const submitBtn = document.getElementById('submit-btn');
+                if (!container || !form) return;
+                
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                
+                const headerH = header ? header.offsetHeight : 0;
+                const formH = form.scrollHeight;
+                const buttonH = submitBtn ? submitBtn.offsetHeight : 0;
+                const totalH = headerH + formH + buttonH;
+                
+                const scaleW = vw / container.scrollWidth;
+                const scaleH = vh / totalH;
+                const scale = Math.min(scaleW, scaleH, 1);
+                
+                // 优先使用zoom（Chrome/Android WebView 支持），回退到transform
+                const zoomSupported = typeof document.body.style.zoom !== 'undefined';
+                if (zoomSupported) {
+                    document.body.style.zoom = scale;
+                    // 清理transform回退
+                    container.style.transform = 'none';
+                    container.style.width = '100%';
+                } else {
+                    container.style.transformOrigin = 'top left';
+                    container.style.transform = scale < 1 ? 'scale(' + scale + ')' : 'none';
+                    container.style.width = scale < 1 ? (container.scrollWidth * scale) + 'px' : '100%';
+                }
+            } catch (err) {
+                console.warn('fitPage 适配异常：', err);
+            }
+        }
         
         // 返回上一页
         function goBack() {
