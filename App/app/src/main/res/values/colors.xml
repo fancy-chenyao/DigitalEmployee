@@ -19,4 +19,7 @@
     <color name="text_primary">#212121</color>    <!-- 主要文字 -->
     <color name="text_secondary">#757575</color>  <!-- 次要文字 -->
     <color name="text_hint">#BDBDBD</color>       <!-- 提示文字 -->
+    
+    <!-- 错误颜色 -->
+    <color name="error_red">#F44336</color>       <!-- 错误红色 -->
 </resources>

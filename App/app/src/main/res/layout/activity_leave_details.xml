@@ -418,4 +418,62 @@
         </LinearLayout>
     </FrameLayout>
 
+    <!-- 表单验证错误提示弹层：覆盖在主内容之上 -->
+    <FrameLayout
+        android:id="@+id/validationErrorOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:background="@android:color/white"
+            android:elevation="8dp">
+
+            <TextView
+                android:id="@+id/validationErrorTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="提交失败"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:textColor="@color/error_red" />
+
+            <TextView
+                android:id="@+id/tvValidationErrorMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="请检查以下必填项："
+                android:textSize="15sp"
+                android:textColor="@color/text_secondary" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnOkValidationError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="确定" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
 </FrameLayout>

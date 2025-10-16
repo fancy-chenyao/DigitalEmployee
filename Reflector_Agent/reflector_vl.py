@@ -22,7 +22,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 client = OpenAI(
-    api_key="sk-a85ffeb6723a4370991a4e6ece8c59ea",
+    api_key="sk-c2cc873160714661aa76b6d5ab7239bf",
     base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
 )
 
