@@ -136,6 +136,12 @@ class Memory:
         save_dataframe(self.page_path, self.page_db)
         write_dataframe_csv(self.page_path, self.page_db, task_name=self.task_name)
 
+        # 保存available_subtasks的补充代码，如后续有bug可检查这里
+        available_subtasks_path = f"page_{new_index}_available_subtasks"
+        available_subtasks_df = pd.DataFrame(available_subtasks)
+        save_dataframe(available_subtasks_path, available_subtasks_df)
+        write_dataframe_csv(available_subtasks_path, available_subtasks_df, task_name=self.task_name, page_index=new_index)
+
         # 根据配置与连通性：优先写入数据库；不可用时不写DB，保留本地文件
         try:
             if Config.ENABLE_DB and check_connection():
