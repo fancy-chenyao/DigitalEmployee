@@ -127,7 +127,66 @@ class LeaveDetailsActivity : AppCompatActivity() {
         builder.show()
     }
     
+    /**
+     * 验证表单数据
+     */
+    private fun validateForm(): Boolean {
+        val reason = etReason.text.toString().trim()
+        val destination = etDestination.text.toString().trim()
+        
+        val errors = mutableListOf<String>()
+        
+        if (reason.isEmpty()) {
+            errors.add("请假事由不能为空")
+        }
+        
+        if (destination.isEmpty()) {
+            errors.add("拟前往地区不能为空")
+        }
+        
+        if (errors.isNotEmpty()) {
+            showValidationErrorDialog(errors)
+            return false
+        }
+        
+        return true
+    }
+    
+    /**
+     * 显示验证错误提示弹窗
+     */
+    private fun showValidationErrorDialog(errors: List<String>) {
+        val overlay = findViewById<View>(R.id.validationErrorOverlay)
+        val btnOk = findViewById<Button>(R.id.btnOkValidationError)
+        val tvErrorMessage = findViewById<TextView>(R.id.tvValidationErrorMessage)
+        
+        // 设置错误信息
+        val errorMessage = errors.joinToString("\n")
+        tvErrorMessage.text = errorMessage
+        
+        // 显示弹窗
+        overlay.visibility = View.VISIBLE
+        
+        btnOk.setOnClickListener {
+            overlay.visibility = View.GONE
+        }
+        
+        // 延时打印当前元素树，便于PageSniffer捕捉
+        Handler(Looper.getMainLooper()).postDelayed({
+            try {
+                NativeController.getElementTree(this) { tree ->
+                    Log.d("LeaveDetailsActivity", "ValidationErrorOverlay ElementTree:\n${tree.toFormattedString(0)}")
+                }
+            } catch (_: Exception) {}
+        }, 500)
+    }
+    
     private fun showOverlayConfirm() {
+        // 先进行表单验证
+        if (!validateForm()) {
+            return
+        }
+        
         val overlay = findViewById<View>(R.id.confirmOverlay)
         val btnOk = findViewById<Button>(R.id.btnOkOverlay)
         val btnCancel = findViewById<Button>(R.id.btnCancelOverlay)
