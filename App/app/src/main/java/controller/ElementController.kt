@@ -21,13 +21,18 @@ object ElementController {
             }
             PageSniffer.PageType.WEB_VIEW -> {
                 Log.d(TAG, "当前页面为WebView页面")
-                val webView = findWebView(activity)
-                if (webView != null) {
-                    WebViewController.getElementTree(webView) { elementTree ->
-                        callback(elementTree)
-                    }
-                } else {
-                    callback(createErrorElement("未找到WebView"))
+                // 原先直接调用 WebViewController 的实现：
+                // val webView = findWebView(activity)
+                // if (webView != null) {
+                //     WebViewController.getElementTree(webView) { elementTree ->
+                //         callback(elementTree)
+                //     }
+                // } else {
+                //     callback(createErrorElement("未找到WebView"))
+                // }
+                // 委托给混合控制器，统一处理 WebView + Native
+                WvNativeMixController.getElementTree(activity) { elementTree ->
+                    callback(elementTree)
                 }
             }
             else -> {
@@ -44,12 +49,15 @@ object ElementController {
                 NativeController.clickElement(activity, elementId, callback)
             }
             PageSniffer.PageType.WEB_VIEW -> {
-                val webView = findWebView(activity)
-                if (webView != null) {
-                    WebViewController.clickElement(webView, elementId, callback)
-                } else {
-                    callback(false)
-                }
+                // 原先直接调用 WebViewController 的实现：
+                // val webView = findWebView(activity)
+                // if (webView != null) {
+                //     WebViewController.clickElement(webView, elementId, callback)
+                // } else {
+                //     callback(false)
+                // }
+                // 委托给混合控制器，优先原生，回退 WebView
+                WvNativeMixController.clickElement(activity, elementId, callback)
             }
             else -> {
                 AccessibilityController.clickElement(activity, elementId, callback)
@@ -90,30 +98,33 @@ object ElementController {
         }
     }
 
-    fun clickByCoordinateDp(activity: Activity, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
+    fun clickByCoordinateDp(activity: Activity, element: GenericElement, callback: (Boolean) -> Unit) {
         // 使用NativeController的坐标点击功能
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
-                NativeController.clickByCoordinateDp(activity, xDp.toFloat(), yDp.toFloat()) { success ->
+                NativeController.clickByCoordinateDp(activity, element) { success ->
                     callback(success)
                 }
             }
             PageSniffer.PageType.WEB_VIEW -> {
-                val webView = findWebView(activity)
-                if (webView != null) {
-                    WebViewController.clickByCoordinateDp(webView, xDp.toFloat(), yDp.toFloat()) { success ->
-                        if (!success) {
-                            // WebView坐标点击失败
-                            Log.e(TAG, "WebView坐标点击失败")
-                            callback(false)
-                        } else {
-                            callback(true)
-                        }
-                    }
-                } else {
-                    // 未找到WebView时,报错
-                    Log.e(TAG, "页面识别为WebView，但是未找到WebView")
-                    callback(false)
+                // 旧实现：直接使用 WebViewController
+                // val webView = findWebView(activity)
+                // if (webView != null) {
+                //     WebViewController.clickByCoordinateDp(webView, xDp.toFloat(), yDp.toFloat()) { success ->
+                //         if (!success) {
+                //             Log.e(TAG, "WebView坐标点击失败")
+                //             callback(false)
+                //         } else {
+                //             callback(true)
+                //         }
+                //     }
+                // } else {
+                //     Log.e(TAG, "页面识别为WebView，但是未找到WebView")
+                //     callback(false)
+                // }
+                // 新实现：委托给混合控制器（优先 Native，失败回退 WebView）
+                WvNativeMixController.clickByCoordinateDp(activity, element) { success ->
+                    callback(success)
                 }
             }
             else -> {
@@ -123,21 +134,20 @@ object ElementController {
         }
     }
 
-    fun setInputValue(activity: Activity, elementId: String, text: String, callback: (Boolean) -> Unit) {
+
+    fun setInputValue(activity: Activity, element: GenericElement, text: String, callback: (Boolean) -> Unit) {
         when (PageSniffer.getCurrentPageType(activity)) {
             PageSniffer.PageType.NATIVE -> {
-                NativeController.setInputValue(activity, elementId, text, callback)
+                // 下沉到 NativeController，在底层执行 ID 转换或直接使用 view 引用
+                NativeController.setInputValue(activity, element, text, callback)
             }
             PageSniffer.PageType.WEB_VIEW -> {
-                val webView = findWebView(activity)
-                if (webView != null) {
-                    WebViewController.setInputValue(webView, elementId, text, callback)
-                } else {
-                    callback(false)
-                }
+                // 委托给混合控制器，优先原生，回退 WebView；在底层执行 ID 转换
+                WvNativeMixController.setInputValue(activity, element, text, callback)
             }
             else -> {
-                AccessibilityController.setInputValue(activity, elementId, text, callback)
+                // 其他页面类型保持兼容，这里仍将 resourceId 传给无障碍控制器
+                AccessibilityController.setInputValue(activity, element.resourceId, text, callback)
             }
         }
     }

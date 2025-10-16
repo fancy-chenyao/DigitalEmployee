@@ -170,6 +170,24 @@ object NativeController {
         // 执行点击操作
         clickByCoordinate(activity, xPx, yPx, callback)
     }
+
+    /**
+     * 使用元素进行坐标点击（dp版本）
+     * 在此处计算元素中心坐标（dp），并调用现有坐标点击逻辑
+     */
+    fun clickByCoordinateDp(activity: Activity, element: GenericElement, callback: (Boolean) -> Unit) {
+        try {
+            val centerX = (element.bounds.left + element.bounds.right) / 2f
+            val centerY = (element.bounds.top + element.bounds.bottom) / 2f
+            Log.d("NativeController", "元素中心坐标 (dp): x=$centerX, y=$centerY")
+            clickByCoordinateDp(activity, centerX, centerY) { success ->
+                callback(success)
+            }
+        } catch (e: Exception) {
+            Log.e("NativeController", "元素坐标点击失败: ${e.message}")
+            callback(false)
+        }
+    }
     
     /**
      * 通过坐标点击元素（px版本）
@@ -230,6 +248,34 @@ object NativeController {
                 callback(false)
             }
         } else {
+            callback(false)
+        }
+    }
+
+    /**
+     * 设置输入值（传入元素对象）
+     * 仅使用元素的 resourceId 查找 View 并设置文本。
+     */
+    fun setInputValue(activity: Activity, element: GenericElement, text: String, callback: (Boolean) -> Unit) {
+        try {
+            val rootView = activity.window.decorView.findViewById<View>(android.R.id.content)
+            val elementId = element.resourceId
+            val targetView = if (elementId.isNotEmpty()) findViewByResourceName(rootView, elementId) else null
+
+            if (targetView is EditText) {
+                targetView.setText(text)
+                callback(true)
+            } else if (targetView is TextView) {
+                try {
+                    targetView.text = text
+                    callback(true)
+                } catch (_: Exception) {
+                    callback(false)
+                }
+            } else {
+                callback(false)
+            }
+        } catch (_: Exception) {
             callback(false)
         }
     }

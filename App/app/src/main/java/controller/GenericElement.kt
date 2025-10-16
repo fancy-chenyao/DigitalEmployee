@@ -19,6 +19,7 @@ data class GenericElement(
     val selected: Boolean = false,   // 对应 "selected"
     val index: Int = 0,      // 对应 "index"
     val naf: Boolean = false, // 对应 "NAF"
+    val pageType: String = "", // 节点所属页面类型（Native/WebView/Mixed），默认为空
     val additionalProps: Map<String, String>,
     val children: List<GenericElement>,
     val view: View? = null   // 直接引用对应的View对象，仅在Native页面中有效
@@ -39,6 +40,7 @@ data class GenericElement(
         if (text.isNotEmpty()) sb.append(", text='$text'")
         if (contentDesc.isNotEmpty()) sb.append(", content-desc='$contentDesc'")
         if (bounds != Rect()) sb.append(", bounds=[${bounds.left},${bounds.top},${bounds.right},${bounds.bottom}]")
+        if (pageType.isNotEmpty()) sb.append(", page-type='$pageType'")
         sb.append("]")
 
         children.forEach { child ->
@@ -69,10 +71,14 @@ data class GenericElement(
         attributes.add("long-clickable=\"$longClickable\"")
         attributes.add("selected=\"$selected\"")
         attributes.add("bounds=\"[${bounds.left},${bounds.top}][${bounds.right},${bounds.bottom}]\"")
+        // 页面类型
+        if (pageType.isNotEmpty()) attributes.add("page-type=\"${pageType.escapeXml()}\"")
         
         // 添加additionalProps作为属性
         additionalProps.forEach { (key, value) ->
-            attributes.add("${key}=\"${value.escapeXml()}\"")
+            if (key != "pageType") { // 避免与字段重复
+                attributes.add("${key}=\"${value.escapeXml()}\"")
+            }
         }
         
         if (children.isEmpty()) {

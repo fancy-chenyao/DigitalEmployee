@@ -274,41 +274,39 @@ object WebViewController {
         }
     }
 
+    // 重载：接收完整元素对象，底层转换使用其 resourceId 作为 DOM id
+    fun setInputValue(webView: WebView, element: GenericElement, text: String, callback: (Boolean) -> Unit) {
+        val elementId = element.resourceId
+        if (elementId.isEmpty()) {
+            callback(false)
+            return
+        }
+        setInputValue(webView, elementId, text, callback)
+    }
+
     /**
      * 通过坐标点击（dp版本）
      * 优先尝试通过Native根视图进行坐标点击，避免依赖JS；
-     * 若无法获取Activity上下文，则回退到直接在WebView上分发触摸事件。
+     * 需要传入Activity以进行状态栏补偿和发光效果展示。
      */
-    fun clickByCoordinateDp(webView: WebView, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
+    fun clickByCoordinateDp(activity: Activity, webView: WebView, xDp: Float, yDp: Float, callback: (Boolean) -> Unit) {
         try {
-
             // 直接在WebView上分发Touch事件
-            val density = webView.resources.displayMetrics.density
-            val xPxContent = xDp * density
-            val yPxContent = yDp * density
+            val xPxContent = UIUtils.dpToPx(activity, xDp)
+            val yPxContent = UIUtils.dpToPx(activity, yDp)
 
-            // 转为窗口坐标（补偿状态栏）
-            val statusBarHeight = getStatusBarHeightFromContext(webView.context)
-            val xPxWindow = xPxContent
-             val yPxWindow = yPxContent + statusBarHeight
-//            val yPxWindow = yPxContent
-
-            // 转为WebView本地坐标
+            // 计算窗口坐标（屏幕坐标）：webView相对屏幕的偏移 + 内容内偏移
             val loc = IntArray(2)
             webView.getLocationOnScreen(loc)
-             val xLocal = xPxWindow - loc[0]
-             val yLocal = yPxWindow - loc[1]
-//            val xLocal = xPxWindow
-//            val yLocal = yPxWindow
+            val statusBarHeight = UIUtils.getStatusBarHeight(activity)
+            val xPxWindow = xPxContent + loc[0]
+            val yPxWindow = yPxContent + loc[1]-statusBarHeight
 
             // 先显示发光特效，再延迟发送点击事件，避免UI被阻塞
             try {
-                val activity = webView.context as? Activity
-                if (activity != null) {
-                    // 在主线程触发特效，更快渲染
-                    Handler(Looper.getMainLooper()).post {
-                        UIUtils.showGlowEffect(activity, xPxWindow, yPxWindow)
-                    }
+                // 在主线程触发特效，更快渲染
+                Handler(Looper.getMainLooper()).post {
+                    UIUtils.showGlowEffect(activity, xPxWindow, yPxWindow)
                 }
             } catch (_: Exception) { /* 忽略特效失败 */ }
 
@@ -334,10 +332,28 @@ object WebViewController {
                     upEvent.recycle()
 
                     callback(downResult && upResult)
-                }, 60)
+                }, 30)
             }, 1000)
         } catch (e: Exception) {
             Log.e("WebViewController", "clickByCoordinateDp 失败: ${e.message}")
+            callback(false)
+        }
+    }
+
+    /**
+     * 使用元素进行坐标点击（dp版本）
+     * 在此方法中从元素的 bounds 计算中心坐标，并复用现有坐标点击逻辑。
+     */
+    fun clickByCoordinateDp(activity: Activity, webView: WebView, element: GenericElement, callback: (Boolean) -> Unit) {
+        try {
+            val centerX = (element.bounds.left + element.bounds.right) / 2f
+            val centerY = (element.bounds.top + element.bounds.bottom) / 2f
+            Log.d("WebViewController", "元素中心坐标 (dp): x=$centerX, y=$centerY")
+            clickByCoordinateDp(activity, webView, centerX, centerY) { success ->
+                callback(success)
+            }
+        } catch (e: Exception) {
+            Log.e("WebViewController", "元素坐标点击失败: ${e.message}")
             callback(false)
         }
     }
