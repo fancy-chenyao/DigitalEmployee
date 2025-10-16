@@ -164,11 +164,16 @@ class LeaveDetailsActivity : AppCompatActivity() {
         val errorMessage = errors.joinToString("\n")
         tvErrorMessage.text = errorMessage
         
+        // 禁用背景内容的交互
+        disableBackgroundInteraction()
+        
         // 显示弹窗
         overlay.visibility = View.VISIBLE
         
         btnOk.setOnClickListener {
             overlay.visibility = View.GONE
+            // 重新启用背景内容的交互
+            enableBackgroundInteraction()
         }
         
         // 延时打印当前元素树，便于PageSniffer捕捉
@@ -190,10 +195,16 @@ class LeaveDetailsActivity : AppCompatActivity() {
         val overlay = findViewById<View>(R.id.confirmOverlay)
         val btnOk = findViewById<Button>(R.id.btnOkOverlay)
         val btnCancel = findViewById<Button>(R.id.btnCancelOverlay)
+        
+        // 禁用背景内容的交互
+        disableBackgroundInteraction()
+        
         overlay.visibility = View.VISIBLE
 
         btnCancel.setOnClickListener {
             overlay.visibility = View.GONE
+            // 重新启用背景内容的交互
+            enableBackgroundInteraction()
         }
         btnOk.setOnClickListener {
             overlay.visibility = View.GONE
@@ -216,6 +227,10 @@ class LeaveDetailsActivity : AppCompatActivity() {
     private fun showSuccessDialog() {
         val overlay = findViewById<View>(R.id.successOverlay)
         val btnOk = findViewById<Button>(R.id.btnOkSuccess)
+        
+        // 禁用背景内容的交互
+        disableBackgroundInteraction()
+        
         overlay.visibility = View.VISIBLE
 
         btnOk.setOnClickListener {
@@ -235,5 +250,43 @@ class LeaveDetailsActivity : AppCompatActivity() {
         //         }
         //     } catch (_: Exception) {}
         // }, 800)
+    }
+    
+    /**
+     * 禁用背景内容的交互
+     */
+    private fun disableBackgroundInteraction() {
+        // 禁用输入框
+        etReason.isEnabled = false
+        etDestination.isEnabled = false
+        
+        // 禁用按钮
+        btnPrevious.isEnabled = false
+        btnSubmit.isEnabled = false
+        
+        // 禁用图片上传区域
+        layoutImageUpload.isEnabled = false
+        
+        // 禁用返回按钮
+        findViewById<ImageView>(R.id.iv_back).isEnabled = false
+    }
+    
+    /**
+     * 启用背景内容的交互
+     */
+    private fun enableBackgroundInteraction() {
+        // 启用输入框
+        etReason.isEnabled = true
+        etDestination.isEnabled = true
+        
+        // 启用按钮
+        btnPrevious.isEnabled = true
+        btnSubmit.isEnabled = true
+        
+        // 启用图片上传区域
+        layoutImageUpload.isEnabled = true
+        
+        // 启用返回按钮
+        findViewById<ImageView>(R.id.iv_back).isEnabled = true
     }
 }
