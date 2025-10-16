@@ -303,7 +303,7 @@ class MobileService : Service() {
                     Log.d(TAG, "设置防抖等待发送以及延迟强制发送")
                 }
                 else{
-                    Log.d(TAG, "只设置防抖等待发送")
+                    LogDedup.d(TAG, "只设置防抖等待发送")
                 }
                 if (screenNeedUpdate) {
                     // 取消点击动作的回调
@@ -1054,7 +1054,7 @@ class MobileService : Service() {
      * 执行输入动作
      */
     private fun executeInputAction(activity: Activity, element: GenericElement, inputText: String) {
-        ElementController.setInputValue(activity, element.resourceId, inputText) { success ->
+        ElementController.setInputValue(activity, element, inputText) { success ->
             if (success) {
                 Log.d(TAG, "输入动作执行成功: $inputText")
                 screenNeedUpdate = true
@@ -1552,21 +1552,12 @@ class MobileService : Service() {
      * 使用坐标点击目标元素
      */
     private fun clickByCoordinateDP(activity: Activity, targetElement: GenericElement, callback: (Boolean) -> Unit) {
-        // 计算目标元素的中心坐标
-        val centerX = (targetElement.bounds.left + targetElement.bounds.right)/2f
-        val centerY = (targetElement.bounds.top + targetElement.bounds.bottom)/2f
-//        val centerX = targetElement.bounds.left
-//        val centerY = targetElement.bounds.top
-        
-        Log.d(TAG, "使用坐标点击 (dp): ($centerX dp, $centerY dp)")
-        
-        // 使用ElementController的坐标点击功能
-        ElementController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
+        // 不在此处计算坐标，直接传入元素，由底层控制器计算并处理
+        Log.d(TAG, "使用元素进行坐标点击 (dp)，由底层计算坐标并分发")
+
+        ElementController.clickByCoordinateDp(activity, targetElement) { success ->
             callback(success)
         }
-//        NativeController.clickByCoordinateDp(activity, centerX.toFloat(), centerY.toFloat()) { success ->
-//            callback(success)
-//        }
     }
 
 
