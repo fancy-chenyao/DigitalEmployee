@@ -6,20 +6,22 @@ from server import Server
 sys.path.append('.')
 
 load_dotenv()
-os.environ["TASK_AGENT_GPT_VERSION"] = "qwen3-32b"#修改这里
-os.environ["SELECT_AGENT_HISTORY_GPT_VERSION"] = "qwen3-32b"
+os.environ["TASK_AGENT_GPT_VERSION"] = "qwen3-8b"#修改这里
+# os.environ["SELECT_AGENT_HISTORY_GPT_VERSION"] = "qwen3-32b"
 os.environ["EXPLORE_AGENT_GPT_VERSION"] = "qwen3-32b"
 os.environ["SELECT_AGENT_GPT_VERSION"] = "qwen3-32b"
 os.environ["DERIVE_AGENT_GPT_VERSION"] = "qwen3-32b"
-os.environ["PARAMETER_FILLER_AGENT_GPT_VERSION"] = "qwen3-32b"
-os.environ["ACTION_SUMMARIZE_AGENT_GPT_VERSION"] = "qwen3-32b"
-os.environ["SUBTASK_MERGE_AGENT_GPT_VERSION"] = "qwen3-32b"
+os.environ["ACTION_SUMMARIZE_AGENT_GPT_VERSION"] = "qwen3-8b"
+# 未启用，合并子任务
+# os.environ["SUBTASK_MERGE_AGENT_GPT_VERSION"] = "qwen3-8b"
+# 填充子任务参数
+os.environ["PARAMETER_FILLER_AGENT_GPT_VERSION"] = "qwen3-8b"
 
-os.environ["gpt_4"] = "qwen3-32b"
-os.environ["gpt_4_turbo"] = "qwen3-32b"
-os.environ["gpt_3_5_turbo"] = "qwen3-32b"
+# os.environ["gpt_4"] = "qwen3-32b"
+# os.environ["gpt_4_turbo"] = "qwen3-32b"
+# os.environ["gpt_3_5_turbo"] = "qwen3-32b"
 
-os.environ["vision_model"] = "gpt-4o"
+# os.environ["vision_model"] = "gpt-4o"
 # 应用无关模式：不再需要固定应用配置
 for key in ["TARGET_APP_NAME", "TARGET_APP_PACKAGE", "APP_AGENT_GPT_VERSION"]:
     if key in os.environ:
